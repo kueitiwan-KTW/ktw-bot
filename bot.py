@@ -45,6 +45,11 @@ class HotelBot:
         else:
             genai.configure(api_key=api_key)
             
+            # 房型對照表 (從 JSON 文件讀取)
+            room_types_path = os.path.join(os.path.dirname(__file__), 'room_types.json')
+            self.room_types = self._load_json(room_types_path)
+            
+            
             # Define Tools for Gemini
             # Define Tools for Gemini
             self.tools = [self.check_order_status, self.get_weather_forecast, self.get_weekly_forecast, self.update_guest_info]
@@ -85,7 +90,7 @@ Your Knowledge Base (FAQ):
      - **聯絡電話 (Phone Number)**
 
    - **Room Type Normalization (房型核對)**:
-     - **Valid Room Types**: [標準雙人房, 標準三人房, 標準四人房, 經典雙人房, 經典四人房, 行政雙人房, 豪華雙人房, 海景雙人房, 海景四人房, 親子家庭房, ＶＩＰ四人房, 無障礙雙人房, 無障礙四人房]
+     - **Valid Room Types**: [標準雙人房(SD), 標準三人房(ST), 標準四人房(SQ), 經典雙人房(CD), 經典四人房(CQ), 行政雙人房(ED), 豪華雙人房(DD), 海景雙人房(WD), 海景四人房(WQ), 親子家庭房(FM), VIP雙人房(VD), VIP四人房(VQ), 無障礙雙人房(AD), 無障礙四人房(AQ)]
      - **Action**: Map the extracted room type to the closest match in the Valid Room Types list. If it matches one of them, display that specific name.
 
  3. **Order Retrieval Protocol (Strict 3-Step)**:
@@ -93,22 +98,28 @@ Your Knowledge Base (FAQ):
      - **Step 2: Confirmation**: 
         - If tool returns `"status": "confirmation_needed"`, YOU MUST ask: "我幫您找到了訂單編號 [Found ID]，請問是這筆嗎？"
         - **CRITICAL EXCEPTION**: If the tool returns `"status": "found"` (meaning it Auto-Confirmed), **SKIP** asking "Is this correct?". Proceed IMMEDIATELY to Step 3.
-     - **Step 3: Display Order Details (MANDATORY)**: 
-        - After user confirms "是" OR after Auto-Confirm, you MUST:
+     -**Step 3: Display Order Details (MANDATORY - VERBATIM OUTPUT REQUIRED)**:
+        - 🚨 **CRITICAL RULE - NEVER SKIP THIS STEP** 🚨
+        - **YOU MUST ALWAYS DISPLAY THE COMPLETE ORDER DETAILS FIRST**
+        - **FORBIDDEN**: NEVER skip directly to weather forecast or contact verification
+        - **REQUIRED ACTION**: After user confirms "是" OR after Auto-Confirm:
           1. Call `check_order_status(order_id=..., user_confirmed=True)` if not auto-confirmed yet
-          2. **IMMEDIATELY PRESENT the complete order information** extracted from the email body
-          3. Display format MUST include:
-             • 訂單編號: [Order ID]
-             • 訂房人: [Guest Name]
-             • 訂房來源: [Booking Source - Agoda/官網/etc.]
-             • 入住日期: [Check-in Date] (YYYY-MM-DD)
-             • 退房日期: [Check-out Date] (YYYY-MM-DD，共 X 晚)
-             • 房型: [Room Type] X 間
-             • 早餐: [有/無]
-          4. **CRITICAL**: You MUST extract these details from the email body returned by the tool
-          5. **DO NOT** skip directly to asking questions - show the order details FIRST
-     - **Step 4: After Showing Details**: ONLY after displaying order details, proceed to weather and guest info collection.
-    - **Privacy**: If the tool returns "blocked", politely refuse to show details based on privacy rules.
+          2. **IMMEDIATELY** output the VERBATIM `formatted_display` text from tool response
+          3. Do NOT add, remove, or modify ANY part of the formatted_display content
+          4. **ONLY AFTER** showing formatted_display, then proceed to Step 4 (weather, etc.)
+        - **EXAMPLE CORRECT FLOW**:
+          Tool returns `formatted_display`: "訂單來源: 官網\n訂單編號: 12345..."
+          → Your response: "訂單來源: 官網\n訂單編號: 12345..." (EXACT COPY)
+          → Then ask about weather or contact
+        - **EXAMPLE WRONG FLOW** (DO NOT DO THIS):
+          Tool returns formatted_display → You skip it → Ask about weather directly ❌
+     - **Step 4: After Showing Complete Details**: ONLY after displaying ALL order details above, you may proceed to weather forecast and other guest services.
+     - **Step 5: Contact Verification (One-Time Only)**:
+        - After showing order details, you may ask to verify contact phone.
+        - **CRITICAL**: Once user confirms (e.g., says "對", "是", "正確"), **DO NOT** call `check_order_status` again.
+        - **DO NOT** re-display the order details after phone verification.
+        - Instead, proceed directly to asking if they need any other assistance or services.
+     - **Privacy**: If the tool returns "blocked", politely refuse to show details based on privacy rules.
 
 4. **Privacy & Hallucination Rules**:
     - NEVER invent order details. If tool says "blocked" or "not_found", trust it.
@@ -197,10 +208,21 @@ Your Knowledge Base (FAQ):
          
          - **Bed Type Inquiries (IMPORTANT - Database Rules)**:
            When user asks about bed configuration, you MUST:
-           1. **Follow Database Rules** - Only these combinations are possible:
-              • 標準雙人房: 兩小床
-              • 標準三人房: 三小床 OR 一大床+一小床  
-              • 標準四人房: 兩大床 OR 兩小床+一大床 OR 四小床
+            1. **Follow Database Rules** - Only these combinations are possible:
+               • 標準雙人房(SD): 兩小床
+               • 標準三人房(ST): 三小床 OR 一大床+一小床  
+               • 標準四人房(SQ): 兩大床 OR 兩小床+一大床 OR 四小床
+               • 經典雙人房(CD): 兩小床 OR 一大床
+               • 經典四人房(CQ): 兩大床 OR 四小床
+               • 豪華雙人房(DD): 一大床
+               • 行政雙人房(ED): 一大床
+               • 海景雙人房(WD): 一大床 OR 兩小床
+               • 海景四人房(WQ): 兩大床 OR 四小床
+               • VIP雙人房(VD): 一大床
+               • VIP四人房(VQ): 兩大床
+               • 親子家庭房(FM): 兩大床 OR 一大床+兩小床
+               • 無障礙雙人房(AD): 一大床
+               • 無障礙四人房(AQ): 兩大床
            2. **Ask to clarify their preference** if they mention bed type
            3. **Record their request** using update_guest_info(order_id, 'special_need', '床型需求：XXX')
            4. **Use CAREFUL wording** - NEVER guarantee arrangement:
@@ -265,7 +287,7 @@ Your Knowledge Base (FAQ):
             
             # Main model for conversation and function calling
             self.model = genai.GenerativeModel(
-                model_name='gemini-2.0-flash-exp',
+                model_name='gemini-2.5-flash',
                 tools=self.tools,
                 system_instruction=self.system_instruction,
                 safety_settings=safety_settings,
@@ -355,9 +377,18 @@ Your Knowledge Base (FAQ):
             # 4. Extract Order ID (different logic for PMS vs Gmail)
             if data_source == 'pms':
                 # PMS data is already clean and structured
-                found_id = order_info['data']['booking_id']
-                found_subject = f"PMS Order: {found_id}"
-                print(f"📋 PMS Order ID: {found_id}")
+                pms_id = order_info['data']['booking_id']
+                ota_id = order_info['data'].get('ota_booking_id', '')
+                
+                # 优先使用客人输入的号码来确认（如果匹配 OTA 订单号）
+                if ota_id and (order_id in ota_id or ota_id in order_id):
+                    found_id = ota_id  # 使用 OTA 订单号确认
+                    found_subject = f"OTA Order: {ota_id}"
+                    print(f"📋 Using OTA Order ID for confirmation: {found_id}")
+                else:
+                    found_id = pms_id  # 使用 PMS 订单号
+                    found_subject = f"PMS Order: {pms_id}"
+                    print(f"📋 Using PMS Order ID: {pms_id}")
             else:
                 # Gmail data needs extraction (original logic)
                 found_subject = order_info.get('subject', 'Unknown')
@@ -422,13 +453,13 @@ Your Knowledge Base (FAQ):
                     }
 
             # 3. Privacy & Detail Step (Only if Confirmed)
+            from datetime import datetime, timedelta
             today_str = datetime.now().strftime("%Y-%m-%d")
             
             if data_source == 'pms':
                 # PMS data: Simple privacy check based on check-in date
                 try:
                     check_in_date = order_info['data']['check_in_date']
-                    from datetime import datetime, timedelta
                     check_in = datetime.strptime(check_in_date, '%Y-%m-%d')
                     today = datetime.strptime(today_str, '%Y-%m-%d')
                     days_ago = (today - check_in).days
@@ -445,15 +476,121 @@ Your Knowledge Base (FAQ):
                     
                     # Build response from PMS structured data
                     order_data = order_info['data']
-                    clean_body = f"""
-                    訂單編號: {order_data['booking_id']}
-                    訂房人: {order_data['guest_name']}
-                    入住日期: {order_data['check_in_date']}
-                    退房日期: {order_data['check_out_date']}
-                    住宿天數: {order_data['nights']} 晚
-                    訂單狀態: {order_data['status_name']} ({order_data['status_code']})
+                    
+                    # 构建房号信息
+                    room_numbers = order_data.get('room_numbers', [])
+                    room_no_text = ', '.join(room_numbers) if room_numbers else '尚未安排'
+                    
+                    # 构建房型信息（不含人数）
+                    rooms_info = []
+                    for room in order_data.get('rooms', []):
+                        room_name = room.get('room_type_name') or room.get('room_type_code', '').strip()
+                        room_count = room.get('room_count', 1)
+                        room_text = f"{room_name} x{room_count}"
+                        rooms_info.append(room_text)
+                    rooms_text = '\n                    '.join(rooms_info) if rooms_info else '無'
+                    
+                    # 订金信息（只显示已付订金）
+                    deposit_paid = order_data.get('deposit_paid', 0)
+                    deposit_text = ""
+                    if deposit_paid and deposit_paid > 0:
+                        deposit_text = f"\n                    已付訂金: NT${deposit_paid:,.0f}"
+                    
+                    # OTA 订单号（优先显示，如果没有则显示 PMS 订单号）
+                    ota_id = order_data.get('ota_booking_id', '')
+                    display_order_id = ota_id if ota_id else order_data['booking_id']
+                    
+                    # 订房来源（優先從備註判斷，其次才用 OTA ID）
+                    booking_source = "未知"
+                    remarks = order_data.get('remarks', '')
+                    # 優先檢查 remarks 中的關鍵字
+                    if '官網' in remarks or '網路訂房' in order_data.get('guest_name', ''):
+                        booking_source = "官網"
+                    elif 'agoda' in remarks.lower():
+                        booking_source = "Agoda"
+                    elif 'booking.com' in remarks.lower():
+                        booking_source = "Booking.com"
+                    # 如果 remarks 沒有，才用 OTA ID 判斷
+                    elif ota_id:
+                        if ota_id.startswith('RMAG'):
+                            booking_source = "Agoda"
+                        elif ota_id.startswith('RMPGP'):
+                            booking_source = "Booking.com"
+                    
+                    # 組合姓名：優先使用 Last Name + First Name
+                    last_name = order_data.get('guest_last_name', '').strip()
+                    first_name = order_data.get('guest_first_name', '').strip()
+                    if last_name and first_name:
+                        full_name = f"{last_name}{first_name}"
+                    else:
+                        full_name = order_data.get('guest_name', '')
+                    
+                    # 訂單狀態檢查
+                    status_name = order_data.get('status_name', '未知')
+                    status_code = order_data.get('status_code', '')
+                    
+                    # 如果訂單已取消，只顯示取消訊息
+                    if status_code.strip() == 'D' or '取消' in status_name:
+                        clean_body = f"""
+                    ⚠️ 訂單狀態：已取消
+                    
+                    此訂單已經取消，無法辦理入住。
+                    如有疑問，請聯繫櫃檯：(03) 832-5700
+                    """
+                    else:
+                        # 正常訂單：顯示核對資訊
+                        
+                        # 构建房型信息（只显示中文名称）
+                        rooms_info = []
+                        for room in order_data.get('rooms', []):
+                            # PMS API 返回大寫鍵名，需要處理大小寫
+                            room_code = room.get('ROOM_TYPE_CODE') or room.get('room_type_code', '')
+                            room_code = room_code.strip() if room_code else ''
+                            
+                            # 優先使用房型代碼查詢中文名稱
+                            if room_code in self.room_types:
+                                room_name = self.room_types[room_code]['zh']
+                            else:
+                                room_name = room.get('ROOM_TYPE_NAME') or room.get('room_type_name') or room_code
+                            
+                            room_count = room.get('ROOM_COUNT') or room.get('room_count', 1)
+                            room_text = f"{room_name} x{room_count}"
+                            rooms_info.append(room_text)
+                        rooms_text = '\n                    '.join(rooms_info) if rooms_info else '無'
+                        
+                        # 订金信息（只显示已付订金，如有）
+                        deposit_paid = order_data.get('deposit_paid', 0)
+                        deposit_text = ""
+                        if deposit_paid and deposit_paid > 0:
+                            deposit_text = f"\n                    已付訂金: NT${deposit_paid:,.0f}"
+                        
+                        
+                        # 早餐資訊（從房價代號或備註判斷）
+                        breakfast = "有"  # 預設有早餐
+                        
+                        # 檢查備註中的產品名稱
+                        if '不含早' in remarks:
+                            breakfast = "無"
+                        
+                        
+                        # 也檢查房型名稱
+                        for room in order_data.get('rooms', []):
+                            room_type_name = room.get('room_type_name')
+                            if room_type_name and '不含早' in room_type_name:
+                                breakfast = "無"
+                                break
+                        
+                        
+                        
+                        clean_body = f"""
+                    訂單來源: {booking_source}
+                    訂單編號: {ota_id if ota_id else order_data['booking_id']}
+                    訂房人姓名: {full_name}
                     聯絡電話: {order_data.get('contact_phone', '未提供')}
-                    備註: {order_data.get('remarks', '無')}
+                    入住日期: {order_data['check_in_date']}
+                    退房日期: {order_data['check_out_date']} (共 {order_data['nights']} 晚)
+                    房型: {rooms_text}{deposit_text}
+                    早餐: {breakfast}
                     """
                     
                 except Exception as e:
@@ -487,13 +624,19 @@ Your Knowledge Base (FAQ):
                 
                 Instructions:
                 1. Search for "Check-in" or "入住日期" in the content.
-                2. Extract the date text (e.g., "Dec 6, 2025" or "2025-12-06").
-                3. Parse it to YYYY-MM-DD.
+                2. Extract the date text (e.g., "Dec 14, 2025" or "2025-12-14").
+                3. Parse it to YYYY-MM-D.
                 4. Calculate DAYS_AGO = Current Date - Check-in Date.
                 5. Logic:
-                   - If DAYS_AGO <= 5: ALLOW (Result: YES)
+                   - If Check-in Date is in the FUTURE (DAYS_AGO < 0): ALLOW (Result: YES)
+                   - If DAYS_AGO >= 0 and DAYS_AGO <= 5: ALLOW (Result: YES)
                    - If DAYS_AGO > 5: BLOCK (Result: NO)
                    - If Date Not Found: BLOCK (Result: NO)
+                
+                Examples:
+                - Today: 2025-12-11, Check-in: 2025-12-14 → DAYS_AGO = -3 → ALLOW (Future booking)
+                - Today: 2025-12-11, Check-in: 2025-12-10 → DAYS_AGO = 1 → ALLOW (Recent)
+                - Today: 2025-12-11, Check-in: 2025-12-05 → DAYS_AGO = 6 → BLOCK (Too old)
                 
                 Output Required Format:
                 REASON: [Found Date: X, Days Ago: Y, Decision: Valid/Invalid because...]
@@ -658,12 +801,13 @@ Your Knowledge Base (FAQ):
             except Exception as e:
                 print(f"⚠️ Failed to save order: {e}")
             
-            # Return FULL details
+            # Return FULL details with pre-formatted display text
             return {
                 "status": "found",
                 "order_id": found_id,
                 "subject": found_subject,
-                "body": clean_body
+                "body": clean_body,
+                "formatted_display": clean_body  # 预格式化的完整订单文本，LLM 应直接原样输出
             }
 
 
@@ -840,6 +984,23 @@ Your Knowledge Base (FAQ):
             print(f"Creating new chat session for user: {user_id}")
             self.user_sessions[user_id] = self.model.start_chat(enable_automatic_function_calling=True)
         return self.user_sessions[user_id]
+
+    def reset_conversation(self, user_id):
+        """重置用戶對話：清除 chat session 和對話歷史"""
+        # 刪除 chat session（下次會重新創建）
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+            print(f"✅ Reset chat session for user: {user_id}")
+        
+        # 清除用戶上下文
+        if user_id in self.user_context:
+            del self.user_context[user_id]
+            print(f"✅ Cleared context for user: {user_id}")
+        
+        # 清除對話日誌（保留歷史記錄但標記為新對話）
+        self.logger.log(user_id, "System", "=== 對話已重新開始 ===")
+        print(f"🔄 User {user_id} conversation resetted")
+
 
     def generate_response(self, user_question, user_id="default_user", display_name=None):
         # 設定當前用戶 ID，供工具函數使用

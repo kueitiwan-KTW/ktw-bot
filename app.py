@@ -63,8 +63,15 @@ def handle_message(event):
     except Exception as e:
         print(f"Error getting profile: {e}")
     
-    # Generate response using HotelBot
-    reply_text = hotel_bot.generate_response(user_msg, user_id, display_name)
+    # Check for reset command
+    if user_msg.lower() in ['重新開始', 'reset', 'restart', '清除對話']:
+        # Reset chat session for this user
+        hotel_bot.reset_conversation(user_id)
+        reply_text = "好的！已為您重新開始對話。有什麼能為您服務的嗎？😊"
+    else:
+        # Generate response using HotelBot
+        reply_text = hotel_bot.generate_response(user_msg, user_id, display_name)
+    
     
     # Remove Markdown formatting (LINE doesn't support it)
     import re

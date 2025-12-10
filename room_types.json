@@ -1,0 +1,58 @@
+{
+    "AD": {
+        "zh": "無障礙雙人房",
+        "en": "Accessible Double Room"
+    },
+    "AQ": {
+        "zh": "無障礙四人房",
+        "en": "Accessible Quadruple Room"
+    },
+    "CD": {
+        "zh": "經典雙人房",
+        "en": "Classic Double Room"
+    },
+    "CQ": {
+        "zh": "經典四人房",
+        "en": "Classic Quadruple Room"
+    },
+    "DD": {
+        "zh": "豪華雙人房",
+        "en": "Deluxe Double Room"
+    },
+    "ED": {
+        "zh": "行政雙人房",
+        "en": "Executive Double Room"
+    },
+    "FM": {
+        "zh": "親子家庭房",
+        "en": "Family Room"
+    },
+    "SD": {
+        "zh": "標準雙人房",
+        "en": "Standard Double Room"
+    },
+    "SQ": {
+        "zh": "標準四人房",
+        "en": "Standard Quadruple Room"
+    },
+    "ST": {
+        "zh": "標準三人房",
+        "en": "Standard Triple Room"
+    },
+    "VD": {
+        "zh": "VIP 雙人房",
+        "en": "VIP Signature Double Room"
+    },
+    "VQ": {
+        "zh": "VIP 四人房",
+        "en": "VIP Signature Quadruple Room"
+    },
+    "WD": {
+        "zh": "海景雙人房",
+        "en": "Double Room, Ocean View"
+    },
+    "WQ": {
+        "zh": "海景四人房",
+        "en": "Quadruple Room, Ocean View"
+    }
+}
