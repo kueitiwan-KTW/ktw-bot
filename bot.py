@@ -13,6 +13,7 @@ from google_services import GoogleServices
 from gmail_helper import GmailHelper
 from chat_logger import ChatLogger
 from weather_helper import WeatherHelper
+from pms_client import PMSClient
 
 class HotelBot:
     def __init__(self, knowledge_base_path, persona_path):
@@ -25,6 +26,9 @@ class HotelBot:
         
         # Initialize Weather Helper
         self.weather_helper = WeatherHelper()
+        
+        # Initialize PMS Client
+        self.pms_client = PMSClient()
         
         # Initialize Logger
         self.logger = ChatLogger()
@@ -318,51 +322,82 @@ Your Knowledge Base (FAQ):
             # Clean input
             order_id = order_id.strip()
 
-            # 1. Search Logic
-            order_info = self.gmail_helper.search_order(order_id)
+            # 1. Try PMS API First (Primary Data Source)
+            order_info = None
+            data_source = None
             
+            try:
+                print("🔷 Attempting PMS API query...")
+                pms_response = self.pms_client.get_booking_details(order_id)
+                
+                if pms_response and pms_response.get('success'):
+                    order_info = pms_response
+                    data_source = 'pms'
+                    print(f"✅ PMS API Success: {pms_response['data']['booking_id']}")
+                else:
+                    print("📭 PMS API: Booking not found")
+            except Exception as e:
+                print(f"⚠️ PMS API failed: {e}")
+            
+            # 2. Fallback to Gmail if PMS fails
+            if not order_info or data_source != 'pms':
+                print("📧 Falling back to Gmail search...")
+                gmail_info = self.gmail_helper.search_order(order_id)
+                if gmail_info:
+                    order_info = gmail_info
+                    data_source = 'gmail'
+                    print("✅ Gmail search successful")
+            
+            # 3. Check if we found anything
             if not order_info:
                 return {"status": "not_found", "order_id": order_id}
 
-            found_subject = order_info.get('subject', 'Unknown')
-            # Extract NUMERIC-ONLY order ID from subject (ignore prefixes like RMAG, RMPGP)
-            found_id = order_info.get('order_id', 'Unknown')
-            
-            # Always try to extract the most complete NUMERIC order ID from subject
-            import re
-            # Look for long numeric sequences (10+ digits preferred, min 6 digits)
-            patterns = [
-                r'訂單編號[：:]?\s*(?:[A-Z]+)?(\d{6,})',  # Optional colon
-                r'編號[：:]?\s*(?:[A-Z]+)?(\d{6,})',
-                r'Booking\s+ID[：:]?\s*(?:[A-Z]+)?(\d{6,})',
-                r'\b(?:RM[A-Z]{2})?(\d{10,})\b',  # Optional RMAG prefix
-                r'\b(\d{10,})\b'  # Pure long number
-            ]
-            
-            extracted_id = None
-            for pattern in patterns:
-                match = re.search(pattern, found_subject)
-                if match:
-                    extracted = match.group(1)  # Get ONLY the digits
-                    # Verify this contains the user's query
-                    if order_id in extracted or extracted in order_id:
-                        extracted_id = extracted
-                        print(f"📋 Extracted numeric order ID: {extracted_id}")
-                        break
-            
-            # Use extracted numeric ID if it's longer/more complete
-            if extracted_id:
-                # Remove any non-digit characters from extracted_id
-                extracted_id = re.sub(r'\D', '', extracted_id)
-                if found_id == 'Unknown' or len(extracted_id) > len(re.sub(r'\D', '', found_id)):
-                    found_id = extracted_id
-            elif found_id == 'Unknown':
-                # Final fallback: extract digits from order_id or subject
-                numeric_only = re.sub(r'\D', '', order_id)
-                if numeric_only:
-                    found_id = numeric_only
-                else:
-                    found_id = order_id
+            # 4. Extract Order ID (different logic for PMS vs Gmail)
+            if data_source == 'pms':
+                # PMS data is already clean and structured
+                found_id = order_info['data']['booking_id']
+                found_subject = f"PMS Order: {found_id}"
+                print(f"📋 PMS Order ID: {found_id}")
+            else:
+                # Gmail data needs extraction (original logic)
+                found_subject = order_info.get('subject', 'Unknown')
+                found_id = order_info.get('order_id', 'Unknown')
+                
+                # Always try to extract the most complete NUMERIC order ID from subject
+                import re
+                # Look for long numeric sequences (10+ digits preferred, min 6 digits)
+                patterns = [
+                    r'訂單編號[：:]?\s*(?:[A-Z]+)?(\d{6,})',  # Optional colon
+                    r'編號[：:]?\s*(?:[A-Z]+)?(\d{6,})',
+                    r'Booking\s+ID[：:]?\s*(?:[A-Z]+)?(\d{6,})',
+                    r'\b(?:RM[A-Z]{2})?(\d{10,})\b',  # Optional RMAG prefix
+                    r'\b(\d{10,})\b'  # Pure long number
+                ]
+                
+                extracted_id = None
+                for pattern in patterns:
+                    match = re.search(pattern, found_subject)
+                    if match:
+                        extracted = match.group(1)  # Get ONLY the digits
+                        # Verify this contains the user's query
+                        if order_id in extracted or extracted in order_id:
+                            extracted_id = extracted
+                            print(f"📋 Extracted numeric order ID: {extracted_id}")
+                            break
+                
+                # Use extracted numeric ID if it's longer/more complete
+                if extracted_id:
+                    # Remove any non-digit characters from extracted_id
+                    extracted_id = re.sub(r'\D', '', extracted_id)
+                    if found_id == 'Unknown' or len(extracted_id) > len(re.sub(r'\D', '', found_id)):
+                        found_id = extracted_id
+                elif found_id == 'Unknown':
+                    # Final fallback: extract digits from order_id or subject
+                    numeric_only = re.sub(r'\D', '', order_id)
+                    if numeric_only:
+                        found_id = numeric_only
+                    else:
+                        found_id = order_id
             
             # 2. Confirmation Step (Safety + Correctness)
             if not user_confirmed:
@@ -387,71 +422,112 @@ Your Knowledge Base (FAQ):
                     }
 
             # 3. Privacy & Detail Step (Only if Confirmed)
-            # STRICT PRIVACY CHECK (LLM-based)
-            # Policy Update: Only block if check-in date is > 5 days in the past.
-            body = order_info.get('body', '')
             today_str = datetime.now().strftime("%Y-%m-%d")
-
-            # Remove sensitive blocks first (CSS/Script)
-            clean_body = re.sub(r'<style.*?>.*?</style>', '', body, flags=re.DOTALL | re.IGNORECASE)
-            clean_body = re.sub(r'<script.*?>.*?</script>', '', clean_body, flags=re.DOTALL | re.IGNORECASE)
-            # Remove remaining tags
-            clean_body = re.sub(r'<[^>]+>', ' ', clean_body)
-            # Collapse whitespace
-            clean_body = re.sub(r'\s+', ' ', clean_body).strip()
             
-            print(f"📧 Cleaned Email Body Preview (First 500 chars):\n{clean_body[:500]}") # Debug Log
-
-            validation_prompt = f"""
-            Task: Check-in Date Privacy Verification.
-            
-            Current Date: {today_str}
-            Email Text Content:
-            {clean_body[:3000]}
-            
-            Instructions:
-            1. Search for "Check-in" or "入住日期" in the content.
-            2. Extract the date text (e.g., "Dec 6, 2025" or "2025-12-06").
-            3. Parse it to YYYY-MM-DD.
-            4. Calculate DAYS_AGO = Current Date - Check-in Date.
-            5. Logic:
-               - If DAYS_AGO <= 5: ALLOW (Result: YES)
-               - If DAYS_AGO > 5: BLOCK (Result: NO)
-               - If Date Not Found: BLOCK (Result: NO)
-            
-            Output Required Format:
-            REASON: [Found Date: X, Days Ago: Y, Decision: Valid/Invalid because...]
-            RESULT: [YES/NO]
-            """
-            
-            try:
-                # Use the Validator Model
-                validator_response = self.validator_model.generate_content(validation_prompt)
-                full_response = validator_response.text.strip()
-                print(f"🤔 Validator Thought Process:\n{full_response}")
-                
-                # Parse Result (handle both "RESULT: YES" and "RESULT: [YES]")
-                match = re.search(r'RESULT:\s*\[?(YES|NO)\]?', full_response, re.IGNORECASE)
-                result = match.group(1).upper() if match else 'NO'
-                
-                print(f"🔒 Privacy Validator Final Decision: {result} (Today: {today_str})")
-                
-                if result != 'YES':
-                     # Block it
-                     print(f"🚫 Blocking Old Order (Over 5 days): {found_id}")
-                     return {
+            if data_source == 'pms':
+                # PMS data: Simple privacy check based on check-in date
+                try:
+                    check_in_date = order_info['data']['check_in_date']
+                    from datetime import datetime, timedelta
+                    check_in = datetime.strptime(check_in_date, '%Y-%m-%d')
+                    today = datetime.strptime(today_str, '%Y-%m-%d')
+                    days_ago = (today - check_in).days
+                    
+                    if days_ago > 5:
+                        print(f"🚫 Blocking Old PMS Order (Over 5 days): {found_id}")
+                        return {
+                            "status": "blocked",
+                            "reason": "privacy_protection",
+                            "message": "System Alert: This order is historical (Check-in > 5 days ago). Access Denied."
+                        }
+                    
+                    print(f"✅ Privacy Check Passed for PMS Order: {found_id}")
+                    
+                    # Build response from PMS structured data
+                    order_data = order_info['data']
+                    clean_body = f"""
+                    訂單編號: {order_data['booking_id']}
+                    訂房人: {order_data['guest_name']}
+                    入住日期: {order_data['check_in_date']}
+                    退房日期: {order_data['check_out_date']}
+                    住宿天數: {order_data['nights']} 晚
+                    訂單狀態: {order_data['status_name']} ({order_data['status_code']})
+                    聯絡電話: {order_data.get('contact_phone', '未提供')}
+                    備註: {order_data.get('remarks', '無')}
+                    """
+                    
+                except Exception as e:
+                    print(f"❌ PMS Privacy check error: {e}")
+                    return {
                         "status": "blocked",
-                        "reason": "privacy_protection",
-                        "message": "System Alert: This order is historical (Check-in > 5 days ago). Access Denied."
+                        "reason": "system_error",
+                        "message": "Privacy verification system encountered an error."
                     }
+                    
+            else:
+                # Gmail data: Original LLM-based privacy check
+                body = order_info.get('body', '')
+
+                # Remove sensitive blocks first (CSS/Script)
+                clean_body = re.sub(r'<style.*?>.*?</style>', '', body, flags=re.DOTALL | re.IGNORECASE)
+                clean_body = re.sub(r'<script.*?>.*?</script>', '', clean_body, flags=re.DOTALL | re.IGNORECASE)
+                # Remove remaining tags
+                clean_body = re.sub(r'<[^>]+>', ' ', clean_body)
+                # Collapse whitespace
+                clean_body = re.sub(r'\s+', ' ', clean_body).strip()
                 
-            except Exception as e:
-                # FAIL SAFE: If validation fails, BLOCK access rather than allowing.
-                return {
-                    "status": "blocked",
-                    "reason": "system_error",
-                    "message": "System Alert: Privacy verification system encountered an error. Access temporarily denied to prevent data leak."
-                }
+                print(f"📧 Cleaned Email Body Preview (First 500 chars):\n{clean_body[:500]}") # Debug Log
+
+                validation_prompt = f"""
+                Task: Check-in Date Privacy Verification.
+                
+                Current Date: {today_str}
+                Email Text Content:
+                {clean_body[:3000]}
+                
+                Instructions:
+                1. Search for "Check-in" or "入住日期" in the content.
+                2. Extract the date text (e.g., "Dec 6, 2025" or "2025-12-06").
+                3. Parse it to YYYY-MM-DD.
+                4. Calculate DAYS_AGO = Current Date - Check-in Date.
+                5. Logic:
+                   - If DAYS_AGO <= 5: ALLOW (Result: YES)
+                   - If DAYS_AGO > 5: BLOCK (Result: NO)
+                   - If Date Not Found: BLOCK (Result: NO)
+                
+                Output Required Format:
+                REASON: [Found Date: X, Days Ago: Y, Decision: Valid/Invalid because...]
+                RESULT: [YES/NO]
+                """
+                
+                try:
+                    # Use the Validator Model
+                    validator_response = self.validator_model.generate_content(validation_prompt)
+                    full_response = validator_response.text.strip()
+                    print(f"🤔 Validator Thought Process:\n{full_response}")
+                    
+                    # Parse Result (handle both "RESULT: YES" and "RESULT: [YES]")
+                    match = re.search(r'RESULT:\s*\[?(YES|NO)\]?', full_response, re.IGNORECASE)
+                    result = match.group(1).upper() if match else 'NO'
+                    
+                    print(f"🔒 Privacy Validator Final Decision: {result} (Today: {today_str})")
+                    
+                    if result != 'YES':
+                         # Block it
+                         print(f"🚫 Blocking Old Order (Over 5 days): {found_id}")
+                         return {
+                            "status": "blocked",
+                            "reason": "privacy_protection",
+                            "message": "System Alert: This order is historical (Check-in > 5 days ago). Access Denied."
+                        }
+                    
+                except Exception as e:
+                    # FAIL SAFE: If validation fails, BLOCK access rather than allowing.
+                    return {
+                        "status": "blocked",
+                        "reason": "system_error",
+                        "message": "System Alert: Privacy verification system encountered an error. Access temporarily denied to prevent data leak."
+                    }
 
             # PASSED! User is allowed to see the order details.
             print(f"✅ Privacy Check Passed for Order: {found_id}")
