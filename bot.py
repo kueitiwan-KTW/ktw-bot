@@ -99,20 +99,39 @@ Your Knowledge Base (FAQ):
         - If tool returns `"status": "confirmation_needed"`, YOU MUST ask: "我幫您找到了訂單編號 [Found ID]，請問是這筆嗎？"
         - **CRITICAL EXCEPTION**: If the tool returns `"status": "found"` (meaning it Auto-Confirmed), **SKIP** asking "Is this correct?". Proceed IMMEDIATELY to Step 3.
      -**Step 3: Display Order Details (MANDATORY - VERBATIM OUTPUT REQUIRED)**:
-        - 🚨 **CRITICAL RULE - NEVER SKIP THIS STEP** 🚨
+        - 🚨🚨🚨 **TRIPLE CRITICAL RULE - ABSOLUTE REQUIREMENT** 🚨🚨🚨
+        - **THIS IS THE MOST IMPORTANT RULE IN THE ENTIRE SYSTEM**
         - **YOU MUST ALWAYS DISPLAY THE COMPLETE ORDER DETAILS FIRST**
-        - **FORBIDDEN**: NEVER skip directly to weather forecast or contact verification
-        - **REQUIRED ACTION**: After user confirms "是" OR after Auto-Confirm:
+        - 
+        - **STRICTLY FORBIDDEN ACTIONS** (違反此規則將導致系統故障):
+          ❌ NEVER skip directly to weather forecast
+          ❌ NEVER skip directly to contact phone verification
+          ❌ NEVER ask "聯絡電話是否正確" before showing order details
+          ❌ NEVER show ONLY weather without order details
+          
+        - **REQUIRED ACTION SEQUENCE** (必須按照此順序執行):
           1. Call `check_order_status(order_id=..., user_confirmed=True)` if not auto-confirmed yet
-          2. **IMMEDIATELY** output the VERBATIM `formatted_display` text from tool response
-          3. Do NOT add, remove, or modify ANY part of the formatted_display content
-          4. **ONLY AFTER** showing formatted_display, then proceed to Step 4 (weather, etc.)
-        - **EXAMPLE CORRECT FLOW**:
-          Tool returns `formatted_display`: "訂單來源: 官網\n訂單編號: 12345..."
-          → Your response: "訂單來源: 官網\n訂單編號: 12345..." (EXACT COPY)
-          → Then ask about weather or contact
-        - **EXAMPLE WRONG FLOW** (DO NOT DO THIS):
-          Tool returns formatted_display → You skip it → Ask about weather directly ❌
+          2. **WAIT** for tool response
+          3. **IMMEDIATELY** output the COMPLETE `formatted_display` text
+          4. **VERIFY** you have shown: 訂單來源, 訂單編號, 訂房人姓名, 聯絡電話, 入住日期, 退房日期, 房型, 早餐
+          5. **ONLY AFTER** confirming all 8 fields are visible, proceed to weather/contact
+          
+        - **CORRECT FLOW EXAMPLE**:
+          User: "250285738"
+          Tool: `formatted_display` = "訂單來源: 官網\n訂單編號: RMPGP250285738\n訂房人姓名: 張辰羽..."
+          ✅ Bot Response: "訂單來源: 官網\n訂單編號: RMPGP250285738\n訂房人姓名: 張辰羽..." (EXACT COPY OF ALL 8 FIELDS)
+          ✅ THEN Bot: "🌤️ 溫馨提醒：入住當天..."
+          
+        - **WRONG FLOW EXAMPLE** (絕對禁止):
+          User: "250285738"
+          Tool: `formatted_display` = "訂單來源: 官網..."
+          ❌ Bot Response: "🌤️ 溫馨提醒... 系統顯示您的聯絡電話為..." (SKIPPED ORDER DETAILS!)
+          
+        - **SELF-CHECK BEFORE RESPONDING**:
+          □ Did I receive `formatted_display` from the tool?
+          □ Did I output ALL 8 fields from `formatted_display`?
+          □ Did I verify user can see: 訂單來源, 訂單編號, 姓名, 電話, 入住, 退房, 房型, 早餐?
+          □ If ANY checkbox is NO → DO NOT proceed to weather/contact yet!
      - **Step 4: After Showing Complete Details**: ONLY after displaying ALL order details above, you may proceed to weather forecast and other guest services.
      - **Step 5: Contact Verification (One-Time Only)**:
         - After showing order details, you may ask to verify contact phone.
@@ -335,9 +354,26 @@ Your Knowledge Base (FAQ):
                 user_confirmed: Set to True ONLY after the user explicitly says "Yes" to the found order ID. Default is False.
             
             Returns:
-                Dict with status.
-                - If confirmed=False, returns 'confirmation_needed' and the Found ID.
-                - If confirmed=True, returns full details (after privacy check).
+                Dict with status:
+                - If confirmed=False: returns 'confirmation_needed' and the Found ID.
+                - If confirmed=True: returns full details dict containing:
+                  * status: "found"
+                  * order_id: the booking ID
+                  * subject: email subject or booking source
+                  * body: the cleaned body text
+                  * **formatted_display**: 🚨 CRITICAL - Pre-formatted order details text 🚨
+                    
+                    ⚠️ MANDATORY ACTION REQUIRED ⚠️
+                    When you receive this field, you MUST:
+                    1. Output the EXACT content of `formatted_display` VERBATIM
+                    2. Do NOT skip, summarize, or modify ANY part of it
+                    3. Do NOT proceed to weather/contact BEFORE showing all 8 fields:
+                       訂單來源, 訂單編號, 訂房人姓名, 聯絡電話, 入住日期, 退房日期, 房型, 早餐
+                    4. ONLY after displaying formatted_display, then show weather/contact
+                    
+                    ❌ FORBIDDEN: Skipping `formatted_display` and going directly to:
+                       "🌤️ 溫馨提醒..." or "系統顯示您的聯絡電話..."
+                    ✅ REQUIRED: Display `formatted_display` FIRST, then weather/contact
             """
             print(f"🔧 Tool Called: check_order_status(order_id={order_id}, confirmed={user_confirmed})")
             
@@ -801,13 +837,29 @@ Your Knowledge Base (FAQ):
             except Exception as e:
                 print(f"⚠️ Failed to save order: {e}")
             
-            # Return FULL details with pre-formatted display text
+            # Return FULL details with pre-formatted display text + MANDATORY INSTRUCTION
             return {
                 "status": "found",
                 "order_id": found_id,
                 "subject": found_subject,
                 "body": clean_body,
-                "formatted_display": clean_body  # 预格式化的完整订单文本，LLM 应直接原样输出
+                "formatted_display": clean_body,  # 預格式化的完整訂單文本，LLM 應直接原樣輸出
+                "NEXT_RESPONSE_INSTRUCTION": f"""
+🚨🚨🚨 IMMEDIATE ACTION REQUIRED 🚨🚨🚨
+
+YOU MUST FOLLOW THIS EXACT OUTPUT SEQUENCE:
+
+STEP 1: Output the following EXACT TEXT (訂單詳情):
+{clean_body}
+
+STEP 2: ONLY AFTER showing all above details, then add weather and contact.
+
+❌ DO NOT skip Step 1
+❌ DO NOT go directly to "🌤️ 溫馨提醒"
+❌ DO NOT go directly to "系統顯示您的聯絡電話"
+
+✅ You MUST output Step 1 FIRST, then Step 2
+"""
             }
 
 
@@ -900,6 +952,30 @@ Your Knowledge Base (FAQ):
                 return f"我從圖片中看到了訂單編號 {found_id}。請問您是要查詢這筆訂單嗎？"
             else:
                 return text
+
+        except ValueError as ve:
+            # Gemini API returned finish_reason != STOP (usually due to token limit or safety filter)
+            error_msg = str(ve)
+            print(f"❌ Gemini ValueError: {error_msg}")
+            
+            # Check if it's a finish_reason=1 error (token limit exceeded)
+            if "finish_reason" in error_msg or "The candidate's" in error_msg:
+                print(f"⚠️ Token limit likely exceeded for user {user_id}. Auto-resetting conversation...")
+                
+                # Automatically reset the user's conversation
+                self.reset_conversation(user_id)
+                
+                # Return a friendly message explaining what happened
+                reply = """對話歷史已自動清除，以確保系統正常運作。
+
+請再次提供您的訂單編號，我將為您重新查詢。謝謝！😊"""
+                self.logger.log(user_id, "Bot", reply)
+                return reply
+            
+            # Other ValueError
+            reply = f"【受邀回覆】不好意思，剛才連線有點問題，請您再說一次好嗎？😊"
+            self.logger.log(user_id, "Bot", reply)
+            return reply
 
         except Exception as e:
             import traceback
