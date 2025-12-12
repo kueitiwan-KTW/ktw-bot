@@ -36,6 +36,26 @@ class NotionAIOrganizer:
     
     def __init__(self):
         self.model = genai.GenerativeModel('gemini-2.5-flash')
+        self.current_branch = self._get_current_branch()
+    
+    def _get_current_branch(self):
+        """獲取當前Git分支名稱"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                capture_output=True,
+                text=True
+            )
+            return result.stdout.strip() if result.returncode == 0 else 'unknown'
+        except:
+            return 'unknown'
+    
+    def _get_branch_tag(self):
+        """獲取分支標籤（如果不是main分支則標記[分支]）"""
+        if self.current_branch in ['main', 'master']:
+            return ''
+        return f' [分支: {self.current_branch}]'
     
     def read_markdown(self, file_path):
         """讀取 Markdown 文件"""
@@ -119,11 +139,15 @@ class NotionAIOrganizer:
         """根據分析結果創建 Notion 頁面"""
         # 解析 AI 回應（移除 markdown 代碼塊標記）
         import json
+        import subprocess
         from datetime import datetime
         
         # 清理 JSON（移除 ```json 和 ```）
         cleaned = re.sub(r'```json\s*|\s*```', '', analysis_result.strip())
         data = json.loads(cleaned)
+        
+        # 獲取當前Git分支
+        branch_tag = self._get_branch_tag()
         
         # 查詢現有頁面數量以自動編號
         try:
@@ -133,14 +157,14 @@ class NotionAIOrganizer:
         except:
             page_number = 1
         
-        # 在標題前加上編號和時間戳記
+        # 在標題前加上編號、分支標記和時間戳記
         upload_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        title_with_number_and_time = f"{page_number}. {data['title']} {upload_time}"
+        title_with_number_and_time = f"{page_number}. {data['title']}{branch_tag} {upload_time}"
         
         # 創建頁面
         page = notion.pages.create(
             parent={'page_id': parent_id},
-            icon={'type': 'emoji', 'emoji': '📄'},
+            icon={'type': 'emoji', 'emoji': '📄' if not branch_tag else '🔀'},
             properties={
                 'title': {
                     'title': [{
