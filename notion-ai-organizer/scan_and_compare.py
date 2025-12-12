@@ -53,6 +53,50 @@ class DocumentScanner:
         self.project_root = Path(project_root)
         self.notion_pages = {}  # 存儲 Notion 現有頁面
         self.local_files = {}   # 存儲本地文件
+        self.current_branch = self._get_current_branch()
+        self.is_main_branch = self.current_branch in ['main', 'master']
+    
+    def _get_current_branch(self):
+        """獲取當前Git分支名稱"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True
+            )
+            return result.stdout.strip() if result.returncode == 0 else 'unknown'
+        except:
+            return 'unknown'
+    
+    def _get_all_branches(self):
+        """獲取所有Git分支列表"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['git', 'branch', '-a'],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                branches = []
+                for line in result.stdout.strip().split('\n'):
+                    branch = line.strip().replace('* ', '')
+                    # 排除 remote tracking branches
+                    if not branch.startswith('remotes/'):
+                        branches.append(branch)
+                return branches
+            return []
+        except:
+            return []
+    
+    def get_branch_tag(self):
+        """獲取分支標籤（如果不是main分支則標記[分支]）"""
+        if self.is_main_branch:
+            return ''
+        return f' [分支: {self.current_branch}]'
     
     def scan_local_files(self, include_code=False):
         """掃描本地文件"""
