@@ -36,15 +36,7 @@ router.get('/search', async (req, res) => {
           TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
           TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
           om.DAYS as nights,
-          om.ORDER_STA as status_code,
-          CASE om.ORDER_STA
-            WHEN 'O' THEN '已確認'
-            WHEN 'R' THEN '預約中'
-            WHEN 'C' THEN '已取消'
-            WHEN 'I' THEN '已入住'
-            WHEN 'D' THEN '已退房'
-            ELSE '未知'
-          END as status_name
+          om.ORDER_STA as status_code
         FROM GDWUUKT.ORDER_MN om
         WHERE 1=1
       `;
@@ -65,6 +57,9 @@ router.get('/search', async (req, res) => {
 
             const result = await connection.execute(sql, binds);
 
+            // 狀態碼轉換函數
+            const statusMap = { 'O': '已確認', 'R': '預約中', 'C': '已取消', 'I': '已入住', 'D': '已取消', 'N': '新訂單' };
+
             const bookings = result.rows.map(row => ({
                 booking_id: row[0],
                 guest_name: row[1],
@@ -73,7 +68,7 @@ router.get('/search', async (req, res) => {
                 check_out_date: row[4],
                 nights: row[5],
                 status_code: row[6],
-                status_name: row[7]
+                status_name: statusMap[row[6]] || '未知'
             }));
 
             res.json({
@@ -93,6 +88,186 @@ router.get('/search', async (req, res) => {
             error: {
                 code: 'DATABASE_ERROR',
                 message: '查詢訂單時發生錯誤'
+            }
+        });
+    }
+});
+
+/**
+ * GET /api/bookings/today-checkin
+ * 查詢今日入住訂單清單
+ */
+router.get('/today-checkin', async (req, res) => {
+    try {
+        const pool = db.getPool();
+        const connection = await pool.getConnection();
+
+        try {
+            const newLocal = `
+                SELECT 
+                    TRIM(om.IKEY) as booking_id,
+                    TRIM(om.RVRESERVE_NOS) as ota_booking_id,
+                    om.CUST_NAM as guest_name,
+                    TRIM(om.GLAST_NAM) as guest_last_name,
+                    TRIM(om.GFIRST_NAM) as guest_first_name,
+                    om.CONTACT1_RMK as contact_phone,
+                    TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
+                    TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
+                    om.DAYS as nights,
+                    om.ORDER_STA as status_code,
+                    om.ORDER_RMK as remarks,
+                    om.ORDER_DEPOSIT as room_total
+                FROM GDWUUKT.ORDER_MN om
+                WHERE TRUNC(om.CI_DAT) = TRUNC(SYSDATE)
+                  AND om.ORDER_STA IN ('O', 'I', 'N')
+                ORDER BY om.CI_DAT
+            `;
+            const result = await connection.execute(newLocal);
+
+            // 狀態碼轉換
+            const statusMap = { 'O': '已確認', 'I': '已入住', 'N': '新訂單' };
+
+            // 為每筆訂單查詢房型和房號
+            const bookings = await Promise.all(result.rows.map(async row => {
+                const bookingId = row[0];
+
+                // 查詢房型明細
+                const roomResult = await connection.execute(
+                    `SELECT 
+                        od.ROOM_COD as room_type_code,
+                        rf.ROOM_NAM as room_type_name,
+                        od.ORDER_QNT as room_count,
+                        od.ADULT_QNT as adult_count,
+                        od.CHILD_QNT as child_count
+                     FROM GDWUUKT.ORDER_DT od
+                     LEFT JOIN GDWUUKT.ROOM_RF rf ON od.ROOM_COD = rf.ROOM_TYP
+                     WHERE TRIM(od.IKEY) = :booking_id`,
+                    { booking_id: bookingId }
+                );
+
+                const rooms = roomResult.rows.map(r => ({
+                    room_type_code: r[0],
+                    room_type_name: r[1],
+                    room_count: r[2],
+                    adult_count: r[3],
+                    child_count: r[4]
+                }));
+
+                // 查詢已分配的房號（從 ASSIGN_DT 表）
+                let roomNumbers = [];
+                try {
+                    const roomNoResult = await connection.execute(
+                        `SELECT DISTINCT TRIM(ROOM_NOS) as room_number
+                         FROM GDWUUKT.ASSIGN_DT
+                         WHERE TRIM(IKEY) = :booking_id
+                           AND ROOM_NOS IS NOT NULL`,
+                        { booking_id: bookingId }
+                    );
+                    roomNumbers = roomNoResult.rows.map(r => r[0]).filter(Boolean);
+                } catch (err) {
+                    console.log(`查詢房號失敗 (${bookingId}):`, err.message);
+                }
+
+                return {
+                    booking_id: bookingId,
+                    ota_booking_id: row[1] || '',
+                    guest_name: row[2],
+                    guest_last_name: row[3] || '',
+                    guest_first_name: row[4] || '',
+                    contact_phone: row[5],
+                    check_in_date: row[6],
+                    check_out_date: row[7],
+                    nights: row[8],
+                    status_code: row[9],
+                    status_name: statusMap[row[9]] || '其他',
+                    remarks: row[10],
+                    room_total: row[11] || 0,
+                    deposit_paid: 0,
+                    rooms: rooms,
+                    room_numbers: roomNumbers
+                };
+            }));
+
+            res.json({
+                success: true,
+                data: bookings,
+                count: bookings.length,
+                date: new Date().toISOString().split('T')[0]
+            });
+
+        } finally {
+            await connection.close();
+        }
+
+    } catch (err) {
+        console.error('查詢今日入住失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'DATABASE_ERROR',
+                message: '查詢今日入住時發生錯誤'
+            }
+        });
+    }
+});
+
+/**
+ * GET /api/bookings/today-checkout
+ * 查詢今日退房訂單清單
+ */
+router.get('/today-checkout', async (req, res) => {
+    try {
+        const pool = db.getPool();
+        const connection = await pool.getConnection();
+
+        try {
+            const result = await connection.execute(`
+                SELECT 
+                    TRIM(om.IKEY) as booking_id,
+                    om.CUST_NAM as guest_name,
+                    om.CONTACT1_RMK as contact_phone,
+                    TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
+                    TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
+                    om.DAYS as nights,
+                    om.ORDER_STA as status_code
+                FROM GDWUUKT.ORDER_MN om
+                WHERE TRUNC(om.CO_DAT) = TRUNC(SYSDATE)
+                  AND om.ORDER_STA IN ('I', 'D')
+                ORDER BY om.CO_DAT
+            `);
+
+            // 狀態碼轉換
+            const statusMap = { 'I': '待退房', 'D': '已退房' };
+
+            const bookings = result.rows.map(row => ({
+                booking_id: row[0],
+                guest_name: row[1],
+                contact_phone: row[2],
+                check_in_date: row[3],
+                check_out_date: row[4],
+                nights: row[5],
+                status_code: row[6],
+                status_name: statusMap[row[6]] || '其他'
+            }));
+
+            res.json({
+                success: true,
+                data: bookings,
+                count: bookings.length,
+                date: new Date().toISOString().split('T')[0]
+            });
+
+        } finally {
+            await connection.close();
+        }
+
+    } catch (err) {
+        console.error('查詢今日退房失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'DATABASE_ERROR',
+                message: '查詢今日退房時發生錯誤'
             }
         });
     }
@@ -120,15 +295,7 @@ router.get('/:booking_id', async (req, res) => {
            TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
            om.DAYS as nights,
            om.ORDER_STA as status_code,
-           om.ORDER_RMK as remarks,
-           CASE om.ORDER_STA
-             WHEN 'O' THEN '已確認'
-             WHEN 'R' THEN '預約中'
-             WHEN 'C' THEN '已取消'
-             WHEN 'I' THEN '已入住'
-             WHEN 'D' THEN '已退房'
-             ELSE '未知'
-           END as status_name
+           om.ORDER_RMK as remarks
          FROM GDWUUKT.ORDER_MN om
          WHERE TRIM(om.IKEY) = :booking_id`,
                 { booking_id }
@@ -169,6 +336,9 @@ router.get('/:booking_id', async (req, res) => {
                 child_count: row[4]
             }));
 
+            // 狀態碼轉換
+            const statusMap = { 'O': '已確認', 'R': '預約中', 'C': '已取消', 'I': '已入住', 'D': '已取消', 'N': '新訂單' };
+
             res.json({
                 success: true,
                 data: {
@@ -180,7 +350,7 @@ router.get('/:booking_id', async (req, res) => {
                     nights: order[5],
                     status_code: order[6],
                     remarks: order[7],
-                    status_name: order[8],
+                    status_name: statusMap[order[6]] || '未知',
                     rooms: rooms
                 }
             });

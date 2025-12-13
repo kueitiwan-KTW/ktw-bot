@@ -16,14 +16,17 @@ app.use(express.json());
 // 路由
 const bookingsRouter = require('./routes/bookings');
 const roomsRouter = require('./routes/rooms');
+const dashboardRouter = require('./routes/dashboard');
 
 // API v1 路由
 app.use('/api/v1/bookings', bookingsRouter);
 app.use('/api/v1/rooms', roomsRouter);
+app.use('/api/v1/dashboard', dashboardRouter);
 
 // 向后兼容：保留无版本号的路由（重定向到 v1）
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/rooms', roomsRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 // 健康檢查端點
 app.get('/api/health', (req, res) => {
@@ -38,21 +41,19 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
     res.json({
         message: 'PMS REST API',
-        version: '1.6',
+        version: '1.7',
         apiVersion: 'v1',
         endpoints: {
             health: 'GET /api/health',
             // v1 端點
             searchBookings: 'GET /api/v1/bookings/search?name=XXX&phone=XXX',
             getBooking: 'GET /api/v1/bookings/:booking_id',
+            todayCheckin: 'GET /api/v1/bookings/today-checkin',
+            todayCheckout: 'GET /api/v1/bookings/today-checkout',
             checkAvailability: 'GET /api/v1/rooms/availability?check_in=YYYY-MM-DD&check_out=YYYY-MM-DD',
+            dashboardStats: 'GET /api/v1/dashboard/stats',
             createBooking: 'POST /api/v1/bookings',
-            cancelBooking: 'DELETE /api/v1/bookings/:booking_id',
-            // 兼容端點（無版本號，映射到 v1）
-            searchBookingsCompat: 'GET /api/bookings/search',
-            getBookingCompat: 'GET /api/bookings/:booking_id',
-            createBookingCompat: 'POST /api/bookings',
-            cancelBookingCompat: 'DELETE /api/bookings/:booking_id'
+            cancelBooking: 'DELETE /api/v1/bookings/:booking_id'
         },
         note: '建議使用 /api/v1/ 端點以確保未來兼容性'
     });

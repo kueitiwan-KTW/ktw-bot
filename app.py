@@ -1,5 +1,7 @@
 import os
 import sys
+import json
+from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
@@ -32,6 +34,25 @@ kb_path = os.path.join(base_dir, "knowledge_base.json")
 persona_path = os.path.join(base_dir, "persona.md")
 hotel_bot = HotelBot(kb_path, persona_path)
 
+# 推送通知到 Node.js Core (給 Vue.js Admin 即時顯示)
+import requests as req_lib
+NODEJS_CORE_URL = "http://localhost:3000"
+
+def push_notification(notification_type, data):
+    """推送通知到 Node.js Core，供 Vue.js Admin 即時顯示"""
+    try:
+        response = req_lib.post(
+            f"{NODEJS_CORE_URL}/api/notify",
+            json={"type": notification_type, "data": data},
+            timeout=2
+        )
+        if response.status_code == 200:
+            print(f"📢 通知已推送: {notification_type}")
+        else:
+            print(f"⚠️ 推送失敗: {response.status_code}")
+    except Exception as e:
+        print(f"⚠️ 推送通知失敗: {e}")
+
 @app.route("/callback", methods=['POST'])
 def callback():
     # get X-Line-Signature header value
@@ -57,11 +78,35 @@ def handle_message(event):
     
     # Get User Profile (Display Name)
     display_name = None
+    profile_picture = None
     try:
         profile = line_bot_api.get_profile(user_id)
         display_name = profile.display_name
+        profile_picture = profile.picture_url
     except Exception as e:
         print(f"Error getting profile: {e}")
+    
+    # 檢查 VIP 狀態
+    is_vip = False
+    try:
+        with open(os.path.join(base_dir, "vip_users.json"), "r") as f:
+            vip_data = json.load(f)
+            is_vip = user_id in vip_data.get("vip_users", [])
+    except:
+        pass
+    
+    # 推送客戶資料卡到 Vue.js Admin
+    import threading
+    def async_push():
+        push_notification("new_message", {
+            "user_id": user_id,
+            "display_name": display_name or "未知用戶",
+            "profile_picture": profile_picture,
+            "message": user_msg[:100],  # 限制訊息長度
+            "is_vip": is_vip,
+            "timestamp": datetime.now().isoformat()
+        })
+    threading.Thread(target=async_push).start()
     
     # Check for reset command
     if user_msg.lower() in ['重新開始', 'reset', 'restart', '清除對話']:

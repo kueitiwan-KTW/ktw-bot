@@ -1,0 +1,21 @@
+{
+    "name": "ktw-backend",
+    "version": "1.0.0",
+    "description": "KTW 飯店系統 Node.js Core - API Gateway & 硬體控制",
+    "type": "module",
+    "main": "src/index.js",
+    "scripts": {
+        "dev": "node --watch src/index.js",
+        "start": "node src/index.js"
+    },
+    "dependencies": {
+        "@google/generative-ai": "^0.24.1",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^4.21.2",
+        "ws": "^8.18.3"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    }
+}
