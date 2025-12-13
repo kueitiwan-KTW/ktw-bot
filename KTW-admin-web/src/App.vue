@@ -101,20 +101,40 @@ const services = ref([
 
 // 檢查服務狀態 (透過 Node.js Core API)
 async function checkServiceStatus() {
+  console.log('[DEBUG] Checking service status...');
+  console.log('[DEBUG] API_BASE:', API_BASE);
   try {
     const res = await fetch(`${API_BASE}/api/status`, { 
       signal: AbortSignal.timeout(3000) 
     });
+    console.log('[DEBUG] Response status:', res.status, res.ok);
     if (res.ok) {
       const data = await res.json();
-      services.value = data.services.map(s => ({
-        id: s.id,
-        name: s.name,
-        icon: getServiceIcon(s.id),
-        status: s.status
-      }));
+      console.log('[DEBUG] API Response:', data);
+      
+      // 更新現有的 services 陣列項目，而不是替換整個陣列
+      data.services.forEach(apiService => {
+        const existing = services.value.find(s => s.id === apiService.id);
+        if (existing) {
+          existing.status = apiService.status;
+          existing.name = apiService.name;
+        } else {
+          // 如果是新服務，加入到陣列
+          services.value.push({
+            id: apiService.id,
+            name: apiService.name,
+            icon: getServiceIcon(apiService.id),
+            status: apiService.status
+          });
+        }
+      });
+      
+      console.log('[DEBUG] Updated services:', services.value.map(s => ({id: s.id, status: s.status})));
+    } else {
+      console.error('[DEBUG] Response not OK:', res.status);
     }
   } catch (error) {
+    console.error('[DEBUG] Fetch error:', error);
     services.value.forEach(s => s.status = 'offline');
   }
 }
@@ -404,7 +424,7 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
             <div v-if="guestsLoading" class="loading-text">載入中...</div>
             <div v-else-if="todayGuests.length === 0" class="empty-text">今日無預定入住</div>
             <div v-else class="guest-cards-list">
-              <div v-for="g in todayGuests" :key="g.booking_id" class="guest-card">
+              <div v-for="g in todayGuests" :key="g.booking_id" class="guest-card" :class="'card-status-' + g.status_code">
                 <!-- 客戶資料卡標題 -->
                 <div class="guest-card-header">
                   <span class="guest-card-name">{{ g.guest_name }}</span>
