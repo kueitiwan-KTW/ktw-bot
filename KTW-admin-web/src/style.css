@@ -879,3 +879,114 @@ body {
   border-left: 4px solid #616161;
   opacity: 0.7;
 }
+/* 面板收折功能 */
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 10px;
+}
+
+.panel-header h3 {
+  flex: 1;
+  margin: 0;
+}
+
+.collapse-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: #888;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.collapse-btn:hover {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+.panel-body {
+  transition: all 0.3s ease;
+}
+
+/* 收折後變成薄條 */
+.grid-stack-item.collapsed .grid-stack-item-content {
+  min-height: auto !important;
+  padding: 8px 15px !important;
+}
+
+.grid-stack-item.collapsed .panel-header {
+  padding-bottom: 0;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.grid-stack-item.collapsed .panel-body {
+  display: none;
+}
+
+/* 區塊大標題 */
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  padding: 15px 0;
+  margin: 20px 0 10px 0;
+  border-bottom: 2px solid rgba(255,255,255,0.2);
+}
+
+/* Tab 切換按鈕 */
+.guest-tabs {
+  display: flex;
+  gap: 5px;
+  margin-left: 20px;
+}
+
+.guest-tabs button {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: #aaa;
+  padding: 5px 15px;
+  border-radius: 5px 5px 0 0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.guest-tabs button:hover {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+.guest-tabs button.active {
+  background: rgba(102, 126, 234, 0.3);
+  color: #fff;
+  border-bottom: 2px solid #667eea;
+}
+
+.guest-tabs .tab-count {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+/* 登記姓名（小字，入住後顯示） */
+.registered-name-sub {
+  font-size: 0.75em;
+  font-weight: 400;
+  color: #aaa;
+  margin-left: 5px;
+}
+
+/* 訂房姓名（小字，入住後顯示在登記姓名後） */
+.booking-name-sub {
+  font-size: 0.75em;
+  font-weight: 400;
+  color: #888;
+  margin-left: 5px;
+}
