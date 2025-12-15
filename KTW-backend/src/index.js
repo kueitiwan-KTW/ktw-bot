@@ -6,6 +6,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { beautifyBookings } from './services/ai-beautify.js';
+import { getBookingSource } from './helpers/bookingSource.js';
 import dotenv from 'dotenv';
 import path from 'path'; // Added missing import
 
@@ -75,27 +76,15 @@ function processBookings(bookings, guestOrders) {
         const otaId = booking.ota_booking_id || '';
         const displayOrderId = otaId || booking.booking_id;
 
-        // 2. 訂房來源判斷
-        let bookingSource = "未知";
+        // 2. 訂房來源判斷 (使用共用函數 - DRY)
+        const bookingSource = getBookingSource(otaId);
+
         const remarks = booking.remarks || '';
         const guestName = booking.guest_name || '';
-
-        if (guestName.includes('電話') || guestName.includes('Line訂房') || guestName.includes('手KEY')) {
-            bookingSource = "手KEY";
-        } else if (remarks.includes('官網') || guestName.includes('網路訂房')) {
-            bookingSource = "官網";
-        } else if (remarks.toLowerCase().includes('agoda') || guestName.toLowerCase().includes('agoda')) {
-            bookingSource = "Agoda";
-        } else if (remarks.toLowerCase().includes('booking.com')) {
-            bookingSource = "Booking.com";
-        } else if (otaId) {
-            if (otaId.startsWith('RMAG')) bookingSource = "Agoda";
-            else if (otaId.startsWith('RMPGP')) bookingSource = "Booking.com";
-        }
-
-        // 3. 組合姓名
         const lastName = (booking.guest_last_name || '').trim();
         const firstName = (booking.guest_first_name || '').trim();
+
+        // 3. 組合姓名 (使用已宣告的 lastName, firstName)
         let fullName = lastName && firstName ? `${lastName}${firstName}` : guestName;
         if (!fullName || fullName === guestName) {
             const match = remarks.match(/Guest Name:\s*([A-Za-z\s]+?)(?:\s+benefit|\s+request|$)/i);
@@ -131,7 +120,13 @@ function processBookings(bookings, guestOrders) {
             roomTypeName = roomParts.join(', ') || '未知房型';
         }
 
-        // 8. 回傳結果
+        // 8. 計算應收尾款（只有官網、手KEY、Booking.com 才計算）
+        const needsPayment = ['官網', '手KEY', 'Booking.com'].includes(bookingSource);
+        const depositPaid = booking.deposit_paid || 0;
+        const roomTotal = booking.room_total || 0;
+        const balanceDue = needsPayment ? Math.max(0, roomTotal - depositPaid) : 0;
+
+        // 9. 回傳結果
         const result = {
             booking_id: displayOrderId,
             pms_id: booking.booking_id,
@@ -147,8 +142,9 @@ function processBookings(bookings, guestOrders) {
             status_name: booking.status_name,
             breakfast: breakfast,
             remarks: remarks,
-            deposit_paid: booking.deposit_paid || 0,
-            room_total: booking.room_total || 0,
+            deposit_paid: depositPaid,
+            room_total: roomTotal,
+            balance_due: balanceDue,
             room_type_name: roomTypeName,
             room_numbers: booking.room_numbers || (booking.rooms && booking.rooms.length > 0 ? booking.rooms.map(r => r.room_number).filter(Boolean) : []),
             line_name: botInfo?.display_name || null,
@@ -322,26 +318,38 @@ function translateBreakfast(remarks) {
 // 取得今日統計摘要
 app.get('/api/pms/dashboard', async (req, res) => {
     try {
-        // 取得今日日期
-        const today = new Date().toISOString().split('T')[0];
+        // 從 PMS API 取得真實資料
+        const PMS_API = 'http://192.168.8.3:3000/api';
 
-        // 嘗試從 PMS 取得資料
-        const [checkinRes, checkoutRes] = await Promise.allSettled([
-            fetch(`${PMS_API_BASE} /bookings/search ? check_in = ${today} `, { signal: AbortSignal.timeout(3000) }),
-            fetch(`${PMS_API_BASE} /bookings/search ? check_out = ${today} `, { signal: AbortSignal.timeout(3000) })
+        const [checkinRes, checkoutRes, roomsRes] = await Promise.allSettled([
+            fetch(`${PMS_API}/bookings/today-checkin`, { signal: AbortSignal.timeout(5000) }),
+            fetch(`${PMS_API}/bookings/today-checkout`, { signal: AbortSignal.timeout(5000) }),
+            fetch(`${PMS_API}/rooms/status`, { signal: AbortSignal.timeout(5000) })  // 使用 /status 端點
         ]);
 
         let todayCheckin = 0;
         let todayCheckout = 0;
+        let occupiedRooms = 0;
+        let totalRooms = 0;
 
+        // 今日入住數量
         if (checkinRes.status === 'fulfilled' && checkinRes.value.ok) {
             const data = await checkinRes.value.json();
             todayCheckin = data.count || 0;
         }
 
+        // 今日退房數量
         if (checkoutRes.status === 'fulfilled' && checkoutRes.value.ok) {
             const data = await checkoutRes.value.json();
             todayCheckout = data.count || 0;
+        }
+
+        // 房況統計 - 從 /rooms/status 取得
+        if (roomsRes.status === 'fulfilled' && roomsRes.value.ok) {
+            const data = await roomsRes.value.json();
+            const stats = data.data?.stats || {};
+            totalRooms = stats.total || 0;
+            occupiedRooms = stats.occupied || 0;  // 直接使用 API 計算好的 occupied 數量
         }
 
         res.json({
@@ -349,8 +357,8 @@ app.get('/api/pms/dashboard', async (req, res) => {
             data: {
                 todayCheckin,
                 todayCheckout,
-                occupiedRooms: 35,   // 暫時模擬 (需要 PMS 提供房況 API)
-                totalRooms: 50,
+                occupiedRooms,
+                totalRooms,
                 lastUpdate: new Date().toISOString()
             }
         });
@@ -363,7 +371,7 @@ app.get('/api/pms/dashboard', async (req, res) => {
                 todayCheckin: 0,
                 todayCheckout: 0,
                 occupiedRooms: 0,
-                totalRooms: 50,
+                totalRooms: 0,
                 lastUpdate: new Date().toISOString()
             }
         });
@@ -386,127 +394,9 @@ app.get('/api/pms/today-checkin', async (req, res) => {
             const data = await response.json();
 
             if (data.success && data.data) {
-                // 讀取 Bot 收集的訂單資訊
+                // 使用共用的資料處理函數
                 const guestOrders = getGuestOrders();
-
-                // 🎯 完全複製 Bot 的邏輯 (Python → JavaScript)
-                data.data = data.data.map(booking => {
-                    // 1. OTA 訂單號（優先顯示）
-                    const otaId = booking.ota_booking_id || '';
-                    const displayOrderId = otaId || booking.booking_id;
-
-                    // 2. 訂房來源（優先從 guest_name/remarks 判斷）
-                    let bookingSource = "未知";
-                    const remarks = booking.remarks || '';
-                    const guestName = booking.guest_name || '';
-
-                    // 手動輸入訂單
-                    if (guestName.includes('電話') || guestName.includes('Line訂房') || guestName.includes('手KEY')) {
-                        bookingSource = "手KEY";
-                    } else if (remarks.includes('官網') || guestName.includes('網路訂房')) {
-                        bookingSource = "官網";
-                    } else if (remarks.toLowerCase().includes('agoda') || guestName.toLowerCase().includes('agoda')) {
-                        bookingSource = "Agoda";
-                    } else if (remarks.toLowerCase().includes('booking.com')) {
-                        bookingSource = "Booking.com";
-                    } else if (otaId) {
-                        if (otaId.startsWith('RMAG')) {
-                            bookingSource = "Agoda";
-                        } else if (otaId.startsWith('RMPGP')) {
-                            bookingSource = "Booking.com";
-                        }
-                    }
-
-                    // 3. 組合姓名（優先使用 last_name + first_name，否則從 remarks 提取）
-                    const lastName = (booking.guest_last_name || '').trim();
-                    const firstName = (booking.guest_first_name || '').trim();
-                    let fullName;
-
-                    if (lastName && firstName) {
-                        fullName = `${lastName}${firstName} `;
-                    } else {
-                        // 從 remarks 提取 "Guest Name: XXX"
-                        const match = remarks.match(/Guest Name:\s*([A-Za-z\s]+?)(?:\s+benefit|\s+request|$)/i);
-                        if (match) {
-                            fullName = match[1].trim();
-                        } else {
-                            fullName = guestName;
-                        }
-                    }
-
-                    // 4. 早餐判斷（預設有，remarks 有「不含早」則無）
-                    let breakfast = "有早餐";
-                    if (remarks.includes('不含早')) {
-                        breakfast = "不含早餐";
-                    }
-
-                    // 5. 電話號碼格式化（取後9位數，前面加0）
-                    let formattedPhone = booking.contact_phone || '';
-                    if (formattedPhone) {
-                        // 移除所有非數字字元
-                        const digitsOnly = formattedPhone.replace(/\D/g, '');
-                        // 取後9位數並加0
-                        if (digitsOnly.length >= 9) {
-                            formattedPhone = '0' + digitsOnly.slice(-9);
-                        }
-                    }
-
-                    // 6. 整合 Bot 資料
-                    const botInfo = matchGuestOrder(booking, guestOrders);
-
-                    // 7. 處理房型（合併相同房型並計算數量）
-                    let roomTypeName = '未知房型';
-                    if (booking.rooms && booking.rooms.length > 0) {
-                        // 統計各房型數量
-                        const roomCounts = {};
-                        booking.rooms.forEach(room => {
-                            const roomCode = (room.ROOM_TYPE_CODE || room.room_type_code || '').trim();
-                            const count = room.ROOM_COUNT || room.room_count || 1;
-                            if (roomCode) {
-                                roomCounts[roomCode] = (roomCounts[roomCode] || 0) + count;
-                            }
-                        });
-
-                        // 格式化為 "房型名 x數量" 的形式
-                        const roomParts = Object.entries(roomCounts).map(([code, count]) => {
-                            const name = roomTypeMap[code] || code;
-                            return count > 1 ? `${name} x${count}` : name;
-                        });
-                        roomTypeName = roomParts.join(', ') || '未知房型';
-                    }
-
-                    const result = {
-                        booking_id: displayOrderId,  // 優先顯示 OTA 編號
-                        pms_id: booking.booking_id,  // 保留 PMS 編號供內部使用
-                        booking_source: bookingSource,
-                        guest_name: fullName,
-                        contact_phone: formattedPhone,
-                        check_in_date: booking.check_in_date,
-                        check_out_date: booking.check_out_date,
-                        nights: booking.nights,
-                        status_code: booking.status_code,
-                        status_name: booking.status_name,
-                        breakfast: breakfast,
-                        remarks: remarks,
-                        deposit_paid: booking.deposit_paid || 0,
-                        room_total: booking.room_total || 0,
-                        room_type_name: roomTypeName,
-                        room_numbers: booking.room_numbers || (booking.rooms && booking.rooms.length > 0 ? booking.rooms.map(r => r.room_number).filter(Boolean) : []),
-                        line_name: botInfo?.display_name || null,
-                        arrival_time: botInfo?.arrival_time || null,
-                        special_needs: null
-                    };
-
-                    // 提取特殊需求
-                    if (botInfo?.special_requests?.length) {
-                        const lastRequest = botInfo.special_requests[botInfo.special_requests.length - 1];
-                        if (lastRequest.includes('special_need:')) {
-                            result.special_needs = lastRequest.split('special_need:')[1].trim();
-                        }
-                    }
-
-                    return result;
-                });
+                data.data = processBookings(data.data, guestOrders);
             }
             res.json(data);
         } else {
@@ -608,6 +498,25 @@ app.get('/api/pms/tomorrow-checkin', async (req, res) => {
     } catch (error) {
         console.error('明日入住API錯誤:', error);
         res.status(500).json({ success: false, error: error.message, data: [] });
+    }
+});
+
+// 取得房間狀態（清潔/停用）
+app.get('/api/pms/rooms/status', async (req, res) => {
+    try {
+        const response = await fetch('http://192.168.8.3:3000/api/rooms/status', {
+            signal: AbortSignal.timeout(5000)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            res.json(data);
+        } else {
+            res.status(response.status).json({ success: false, error: 'PMS API error' });
+        }
+    } catch (error) {
+        console.error('房間狀態 API 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message, data: { stats: {}, rooms: [] } });
     }
 });
 

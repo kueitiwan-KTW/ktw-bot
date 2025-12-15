@@ -301,6 +301,94 @@ ORDER BY BEGIN_DAT DESC
 
 ---
 
+## ROOM_MN - 房間主檔 ⭐
+
+> **用途**：存放每個實體房間的狀態（清潔、停用、入住等）
+>
+> **關聯**：透過 `ROOM_NOS`（房號）與 GUEST_MN 關聯
+
+### 清潔狀態相關欄位
+
+| 欄位名 | 類型 | 說明 | 範例值 |
+|--------|------|------|--------|
+| **ROOM_NOS** | NCHAR | 房號 | 201, 606 |
+| **FLOOR_NOS** | NCHAR | 樓層 | 2, 6 |
+| **ROOM_COD** | NCHAR | 房型代碼 | SQ, SD, DD |
+| **ROOM_STA** | NCHAR | 房間狀態 | V=空房, O=入住中 |
+| **CLEAN_STA** | NCHAR | ⭐ **清潔狀態** | **C=乾淨, D=髒, I=待檢查** |
+| **OOS_STA** | NCHAR | ⭐ **停用狀態** | **N=正常, Y=停用/維修** |
+| **OSRESON_RMK** | NVARCHAR2 | 停用原因 | "門檔斷掉" |
+| **ASSIGN_STA** | NCHAR | 分配狀態 | N |
+| **CI_DAT** | DATE | 入住日期 | 2025-12-14 |
+| **CO_DAT** | DATE | 退房日期 | 2025-12-15 |
+
+### 人數相關欄位
+
+| 欄位名 | 說明 |
+|--------|------|
+| **ADULT_QNT** | 成人數 |
+| **CHILD_QNT** | 兒童數 |
+| **BABY_QNT** | 嬰兒數 |
+| **WOMAN_QNT** | 女性數 |
+| **AEXBED_QNT** | 成人加床數 |
+| **CEXBED_QNT** | 兒童加床數 |
+
+### 其他欄位
+
+| 欄位名 | 說明 |
+|--------|------|
+| **CHARACTER_RMK** | 房間備註（如"一大二小"）|
+| **USER_RMK** | 使用者備註 |
+| **BED_STA** | 床位狀態 |
+| **ALARM_TIM** | 鬧鐘時間 |
+| **ALARM_DAT** | 鬧鐘日期 |
+| **CO_CLEAN_PTS** | 退房清潔積分 |
+| **STAY_CLEAN_PTS** | 續住清潔積分 |
+| **INS_DAT/INS_USR** | 建立日期/人員 |
+| **UPD_DAT/UPD_USR** | 更新日期/人員 |
+
+### 清潔狀態代碼對照
+
+| 代碼 | 說明 | 中文 | 顏色建議 |
+|------|------|------|---------|
+| **C** | Clean | 乾淨 | 🟢 綠色 |
+| **D** | Dirty | 髒（待清掃）| 🔴 紅色 |
+| **I** | Inspecting | 待檢查 | 🟡 黃色 |
+
+### 房間狀態代碼對照
+
+| 代碼 | 說明 | 中文 |
+|------|------|------|
+| **V** | Vacant | 空房 |
+| **O** | Occupied | 入住中 |
+
+### 查詢範例
+
+```sql
+-- 查詢所有房間清潔狀態
+SELECT 
+    ROOM_NOS as 房號,
+    ROOM_COD as 房型,
+    ROOM_STA as 房間狀態,
+    CLEAN_STA as 清潔狀態,
+    OOS_STA as 停用狀態,
+    OSRESON_RMK as 停用原因
+FROM GDWUUKT.ROOM_MN
+ORDER BY ROOM_NOS
+
+-- 查詢需要清掃的房間
+SELECT ROOM_NOS 
+FROM GDWUUKT.ROOM_MN 
+WHERE CLEAN_STA = 'D' AND OOS_STA = 'N'
+
+-- 查詢維修中的房間
+SELECT ROOM_NOS, OSRESON_RMK 
+FROM GDWUUKT.ROOM_MN 
+WHERE OOS_STA = 'Y'
+```
+
+---
+
 ## 注意事項
 
 1. **字元集問題**：Oracle 使用字元集 ID 871（繁體中文），Node.js 必須使用 **Thick 模式**

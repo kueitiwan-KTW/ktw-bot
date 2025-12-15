@@ -1,6 +1,6 @@
 {
     "name": "ktw-backend",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "KTW 飯店系統 Node.js Core - API Gateway & 硬體控制",
     "type": "module",
     "main": "src/index.js",

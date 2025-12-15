@@ -1,6 +1,6 @@
 {
     "name": "pms-api",
-    "version": "1.6",
+    "version": "1.7",
     "description": "Oracle PMS REST API for LINE Bot",
     "main": "server.js",
     "scripts": {
