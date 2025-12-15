@@ -126,15 +126,24 @@ body {
 .widget-handle {
   position: absolute;
   top: 8px;
-  right: 12px;
-  cursor: move;
-  color: #666;
-  font-size: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 6px;
+  cursor: grab;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.4), rgba(123, 47, 247, 0.4));
+  border-radius: 3px;
   user-select: none;
+  transition: all 0.2s;
 }
 
 .widget-handle:hover {
-  color: #00d4ff;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.8), rgba(123, 47, 247, 0.8));
+  width: 80px;
+}
+
+.widget-handle:active {
+  cursor: grabbing;
 }
 
 /* 主內容區 */
@@ -192,6 +201,48 @@ body {
 
 .refresh-btn:active {
   transform: translateY(0);
+}
+
+/* 刷新按鈕群組 */
+.refresh-group {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-left: 20px;
+}
+
+/* 倒數計時器 */
+.countdown-timer {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+}
+
+.countdown-timer.warning {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
+.countdown-timer.warning .countdown-value {
+  color: #ff6b6b;
+}
+
+.countdown-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #00d4ff;
+  min-width: 20px;
+  text-align: center;
+}
+
+.countdown-unit {
+  font-size: 0.75rem;
+  color: #888;
 }
 
 
@@ -259,34 +310,53 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  padding: 25px;
+  padding: 20px;
   backdrop-filter: blur(10px);
-  transition: transform 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .stat-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 212, 255, 0.15);
 }
 
 .stat-card h3 {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #888;
-  margin-bottom: 10px;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 .stat-value {
-  font-size: 2.5rem;
+  font-size: 2.8rem;
   font-weight: 700;
-  background: linear-gradient(45deg, #00d4ff, #7b2ff7);
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  line-height: 1;
 }
 
 .stat-unit {
-  font-size: 1rem;
-  color: #888;
-  margin-left: 5px;
+  font-size: 0.95rem;
+  color: #666;
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
 }
 
 /* 房況面板 */
@@ -294,67 +364,98 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  padding: 25px;
+  padding: 20px;
 }
 
 .room-status-panel h3 {
-  margin-bottom: 20px;
-  font-size: 1.2rem;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .room-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+  gap: 6px;
 }
 
 .room-card {
-  aspect-ratio: 1;
-  border-radius: 12px;
+  height: 38px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .room-card:hover {
-  transform: scale(1.05);
-}
-
-.room-card.vacant {
-  background: rgba(0, 200, 83, 0.2);
-  border: 1px solid rgba(0, 200, 83, 0.5);
-  color: #00c853;
-}
-
-.room-card.occupied {
-  background: rgba(33, 150, 243, 0.2);
-  border: 1px solid rgba(33, 150, 243, 0.5);
-  color: #2196f3;
-}
-
-.room-card.cleaning {
-  background: rgba(255, 193, 7, 0.2);
-  border: 1px solid rgba(255, 193, 7, 0.5);
-  color: #ffc107;
-}
-
-.room-card.dnd {
-  background: rgba(244, 67, 54, 0.2);
-  border: 1px solid rgba(244, 67, 54, 0.5);
-  color: #f44336;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
 }
 
 .room-number {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 .room-status-icon {
-  font-size: 0.8rem;
-  margin-top: 3px;
+  display: none;
+  /* 極簡模式：隱藏圖示，只保留顏色和房號 */
+}
+
+/* 房間清潔狀態樣式 - 高對比優化 */
+.room-card.dirty {
+  background: linear-gradient(145deg, #ff5252, #d32f2f);
+  border: none;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.room-card.inspecting {
+  background: linear-gradient(145deg, #ffca28, #f57c00);
+  border: none;
+  color: #fff;
+  /* 或深色視對比度而定，這裡用白字+陰影嘗試 */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.room-card.oos {
+  background: linear-gradient(145deg, #78909c, #455a64);
+  border: none;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.room-card.clean {
+  display: none;
+  /* 再次確保隱藏，雖然 template 有過濾 */
+  background: linear-gradient(145deg, #66bb6a, #388e3c);
+  border: none;
+  color: white;
+}
+
+/* 維修原因顯示 - 用 tooltip 或絕對定位 */
+.room-reason {
+  display: none;
+  /* 小卡片不直接顯示文字，改用 title tooltip */
+}
+
+/* 待處理房間數量 */
+.room-count {
+  font-size: 0.9rem;
+  color: #aaa;
+  font-weight: normal;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
 }
 
 /* 服務狀態監控面板 */
@@ -407,7 +508,8 @@ body {
   height: 10px;
   border-radius: 50%;
   margin-left: auto;
-  background: #666; /* 預設灰色 - 如果狀態未設定 */
+  background: #666;
+  /* 預設灰色 - 如果狀態未設定 */
 }
 
 .service-status-dot.online {
@@ -742,6 +844,8 @@ body {
   border-radius: 12px;
   padding: 15px;
   transition: all 0.3s;
+  min-width: 320px;
+  /* 加寬卡片 */
 }
 
 .guest-card:hover {
@@ -752,15 +856,65 @@ body {
 .guest-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  user-select: none;
+}
+
+.guest-card-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin: -5px;
+  padding: 5px;
+  padding-bottom: 15px;
+  margin-bottom: 7px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.expand-icon {
+  font-size: 0.75rem;
+  color: #666;
+  transition: transform 0.2s;
+}
+
+.header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.header-info {
+  display: flex;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: #aaa;
+  user-select: text;
+  cursor: text;
+}
+
+.header-info .room-number {
+  color: #00d4ff;
+  font-weight: 500;
+}
+
+.header-info .booking-id {
+  color: #999;
+  font-family: monospace;
 }
 
 .guest-card-name {
   font-weight: 600;
   font-size: 1.1rem;
+  user-select: text;
+  cursor: text;
 }
 
 .guest-card-status {
@@ -815,6 +969,9 @@ body {
   white-space: normal;
   overflow-wrap: break-word;
   max-width: 150px;
+  user-select: text;
+  /* 允許選取複製 */
+  cursor: text;
 }
 
 .detail-row.special-request {
@@ -879,13 +1036,14 @@ body {
   border-left: 4px solid #616161;
   opacity: 0.7;
 }
+
 /* 面板收折功能 */
 .panel-header {
   display: flex;
   align-items: center;
   gap: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 10px;
 }
 
@@ -895,7 +1053,7 @@ body {
 }
 
 .collapse-btn {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border: none;
   color: #888;
   width: 28px;
@@ -907,7 +1065,7 @@ body {
 }
 
 .collapse-btn:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 
@@ -938,7 +1096,7 @@ body {
   color: #fff;
   padding: 15px 0;
   margin: 20px 0 10px 0;
-  border-bottom: 2px solid rgba(255,255,255,0.2);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Tab 切換按鈕 */
@@ -949,7 +1107,7 @@ body {
 }
 
 .guest-tabs button {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border: none;
   color: #aaa;
   padding: 5px 15px;
@@ -960,7 +1118,7 @@ body {
 }
 
 .guest-tabs button:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 
@@ -989,4 +1147,133 @@ body {
   font-weight: 400;
   color: #888;
   margin-left: 5px;
+}
+
+/* 房間清潔狀態樣式 */
+.room-card.dirty {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+
+.room-card.inspecting {
+  background: linear-gradient(145deg, #ffd700, #fbc02d);
+  border: none;
+  color: #000;
+  text-shadow: none;
+}
+
+.room-card.oos {
+  background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+  border-color: #6b7280;
+  color: #374151;
+}
+
+.room-card.clean {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #10b981;
+  color: #065f46;
+}
+
+/* 維修原因顯示 */
+.room-reason {
+  font-size: 10px;
+  color: #666;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* 待處理房間數量 */
+.room-count {
+  font-size: 14px;
+  color: #888;
+  font-weight: normal;
+}
+
+/* 自定義 Tooltip 樣式 */
+.custom-tooltip {
+  position: fixed;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  max-width: 320px;
+  animation: fadeIn 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tooltip-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffc107;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 6px;
+}
+
+.tooltip-content {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #fff;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.tooltip-icon {
+  font-size: 1.2rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 狀態圖例樣式 */
+.status-legend {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: normal;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #ccc;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot.dirty {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
+}
+
+.dot.inspecting {
+  background: #ffd700;
+  box-shadow: 0 0 4px rgba(255, 215, 0, 0.8);
 }

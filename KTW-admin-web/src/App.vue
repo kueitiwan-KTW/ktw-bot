@@ -1,7 +1,8 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { GridStack } from 'gridstack'
 import 'gridstack/dist/gridstack.min.css'
+import GuestCard from './components/GuestCard.vue'
 
 // API 基礎 URL（動態取得主機名）
 const API_BASE = `http://${window.location.hostname}:3000`
@@ -16,9 +17,7 @@ const widgets = ref([
   { id: 'occupancy', title: '住房率', x: 6, y: 0, w: 3, h: 2, visible: true, collapsed: false },
   { id: 'vacant', title: '空房數', x: 9, y: 0, w: 3, h: 2, visible: true, collapsed: false },
   { id: 'rooms', title: '即時房況', x: 0, y: 2, w: 12, h: 5, visible: true, collapsed: false },
-  { id: 'guests', title: '今日入住客人', x: 0, y: 7, w: 12, h: 4, visible: true, collapsed: false },
-  { id: 'yesterday', title: '昨日入住客人', x: 0, y: 11, w: 12, h: 4, visible: true, collapsed: false },
-  { id: 'tomorrow', title: '明日入住客人', x: 0, y: 15, w: 12, h: 4, visible: true, collapsed: false },
+  { id: 'guests', title: '昨今明入住資訊', x: 0, y: 7, w: 12, h: 4, visible: true, collapsed: false },
 ])
 
 // 切換面板收折狀態
@@ -66,6 +65,15 @@ async function fetchPMSDashboard() {
     pmsLoading.value = false
   }
 }
+// 狀態排序邏輯 (DRY 原則)：N/R 優先，I 次之，其他依序
+const STATUS_PRIORITY = { 'N': 0, 'R': 1, 'I': 2, 'O': 3, 'D': 4, 'C': 5, 'S': 6, 'CO': 7 };
+function sortGuestsByStatus(guests) {
+  return [...guests].sort((a, b) => {
+    const priorityA = STATUS_PRIORITY[a.status_code] ?? 99;
+    const priorityB = STATUS_PRIORITY[b.status_code] ?? 99;
+    return priorityA - priorityB;
+  });
+}
 
 // 今日入住客人清單
 const todayGuests = ref([])
@@ -81,7 +89,8 @@ async function fetchTodayCheckin() {
     if (res.ok) {
       const result = await res.json()
       if (result.success) {
-        todayGuests.value = result.data || []
+        // 依狀態排序
+        todayGuests.value = sortGuestsByStatus(result.data || [])
       }
     }
   } catch (error) {
@@ -104,7 +113,8 @@ async function fetchYesterdayCheckin() {
     if (res.ok) {
       const result = await res.json()
       if (result.success) {
-        yesterdayGuests.value = result.data || []
+        // 依狀態排序
+        yesterdayGuests.value = sortGuestsByStatus(result.data || [])
       }
     }
   } catch (error) {
@@ -127,7 +137,8 @@ async function fetchTomorrowCheckin() {
     if (res.ok) {
       const result = await res.json()
       if (result.success) {
-        tomorrowGuests.value = result.data || []
+        // 依狀態排序
+        tomorrowGuests.value = sortGuestsByStatus(result.data || [])
       }
     }
   } catch (error) {
@@ -137,13 +148,17 @@ async function fetchTomorrowCheckin() {
   }
 }
 
-// 手動重新整理
+// 手動重新整理 - 全部即時更新
 async function manualRefresh() {
+  // 重設倒數計時器
+  countdown.value = 30
+  
   await Promise.all([
     fetchPMSDashboard(),
     fetchTodayCheckin(),
     fetchYesterdayCheckin(),
     fetchTomorrowCheckin(),
+    fetchRoomStatus(),
     checkServiceStatus()
   ])
 }
@@ -224,42 +239,74 @@ function formatTime(timestamp) {
 
 // 切換面板顯示/隱藏
 function toggleWidget(widgetId) {
-  const widget = widgets.value.find(w => w.id === widgetId)
-  if (widget) {
-    widget.visible = !widget.visible
-    nextTick(() => {
-      if (grid) {
-        if (widget.visible) {
-          // 重新添加到 grid
-        } else {
-          // 從 grid 移除
-          const el = document.querySelector(`[gs-id="${widgetId}"]`)
-          if (el) grid.removeWidget(el, false)
-        }
-      }
-    })
-  }
+  // v-if 會自動處理 DOM 的添加/移除
+  // 切換後需要重新初始化 GridStack
+  nextTick(() => {
+    if (grid) {
+      grid.destroy(false)
+    }
+    grid = GridStack.init({
+      column: 100,
+      cellHeight: 60,
+      margin: 15,
+      animate: true,
+      float: false,
+      disableOneColumnMode: true,
+      minRow: 1,
+      resizable: { handles: 'all' },
+      handle: '.widget-handle',
+      draggable: { handle: '.widget-handle' }
+    }, '.grid-stack')
+  })
 }
 
 // 定時刷新狀態
 let statusInterval = null
 let pmsInterval = null
+let guestInterval = null
+let roomInterval = null
+let countdownInterval = null
+
+// 倒數計時器 (30秒為一個週期)
+const countdown = ref(30)
+
+// 倒數計時器邏輯
+function startCountdown() {
+  countdown.value = 30
+  if (countdownInterval) clearInterval(countdownInterval)
+  countdownInterval = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      countdown.value = 30
+    }
+  }, 1000)
+}
 
 onMounted(() => {
-  // 服務狀態檢測
+  // 服務狀態檢測 (每5秒)
   checkServiceStatus()
-  statusInterval = setInterval(checkServiceStatus, 10000)
+  statusInterval = setInterval(checkServiceStatus, 5000)
   
-  // PMS 統計資料
+  // PMS 統計資料 (每15秒)
   fetchPMSDashboard()
-  pmsInterval = setInterval(fetchPMSDashboard, 15000) // 每15秒刷新
+  pmsInterval = setInterval(fetchPMSDashboard, 15000)
   
-  // 今日入住客人
+  // 入住客人清單 (每30秒)
   fetchTodayCheckin()
-  
-  // 昨日和明日入住客人
   fetchYesterdayCheckin()
   fetchTomorrowCheckin()
+  guestInterval = setInterval(() => {
+    fetchTodayCheckin()
+    fetchYesterdayCheckin()
+    fetchTomorrowCheckin()
+  }, 30000)
+  
+  // 房間狀態 (每15秒)
+  fetchRoomStatus()
+  roomInterval = setInterval(fetchRoomStatus, 15000)
+  
+  // 啟動倒數計時器
+  startCountdown()
   
   // WebSocket 即時通知連線
   connectWebSocket()
@@ -274,7 +321,9 @@ onMounted(() => {
       float: false,
       disableOneColumnMode: true,
       minRow: 1,
-      resizable: { handles: 'all' }
+      resizable: { handles: 'all' },
+      handle: '.widget-handle',  // 只有拖曳手柄可拖動
+      draggable: { handle: '.widget-handle' }  // 明確指定拖曳區域
     }, '.grid-stack')
   })
 })
@@ -339,27 +388,93 @@ onUnmounted(() => {
   if (grid) grid.destroy()
 })
 
-// 模擬房間資料
-const rooms = ref([
-  { number: '101', status: 'occupied' },
-  { number: '102', status: 'vacant' },
-  { number: '103', status: 'cleaning' },
-  { number: '104', status: 'dnd' },
-  { number: '105', status: 'occupied' },
-  { number: '106', status: 'vacant' },
-  { number: '201', status: 'occupied' },
-  { number: '202', status: 'occupied' },
-  { number: '203', status: 'vacant' },
-  { number: '204', status: 'cleaning' },
-  { number: '205', status: 'occupied' },
-  { number: '206', status: 'dnd' },
-  { number: '301', status: 'vacant' },
-  { number: '302', status: 'occupied' },
-  { number: '303', status: 'occupied' },
-  { number: '304', status: 'vacant' },
-])
+// 房間狀態資料（從 PMS API 獲取）
+const rooms = ref([])
+const roomsLoading = ref(false)
+
+// 只顯示需要處理的房間（髒房、待檢查）
+const dirtyRooms = computed(() => {
+  return rooms.value.filter(r => 
+    r.clean_status?.code === 'D' || 
+    r.clean_status?.code === 'I'
+  )
+})
+
+// 獲取房間狀態
+async function fetchRoomStatus() {
+  roomsLoading.value = true
+  try {
+    const res = await fetch('/api/pms/rooms/status')
+    const data = await res.json()
+    if (data.success && data.data?.rooms) {
+      rooms.value = data.data.rooms.map(r => ({
+        number: r.room_number,
+        floor: r.floor,
+        room_type: r.room_type_code,
+        status: r.oos_status ? 'oos' : (r.clean_status?.code === 'D' ? 'dirty' : (r.clean_status?.code === 'I' ? 'inspecting' : 'clean')),
+        clean_status: r.clean_status,
+        oos_status: r.oos_status,
+        oos_reason: r.oos_reason,
+        room_status: r.room_status
+      }))
+    }
+  } catch (e) {
+    console.error('獲取房間狀態失敗:', e)
+  } finally {
+    roomsLoading.value = false
+  }
+}
+
+// Tooltip 狀態
+const hoveredRoom = ref(null)
+const tooltipPos = ref({ x: 0, y: 0 })
+
+function showTooltip(room, e) {
+  if (!room.oos_reason) return
+  hoveredRoom.value = room
+  tooltipPos.value = { x: e.clientX, y: e.clientY }
+}
+
+function moveTooltip(e) {
+  if (hoveredRoom.value) {
+    tooltipPos.value = { x: e.clientX, y: e.clientY }
+  }
+}
+
+function hideTooltip() {
+  hoveredRoom.value = null
+}
 
 const activeMenu = ref('dashboard')
+
+// 處理 menu 切換，切回 dashboard 時重新佈局 GridStack
+function switchMenu(menuId) {
+  activeMenu.value = menuId
+  
+  // 切回 dashboard 時，完全重新初始化 GridStack
+  if (menuId === 'dashboard') {
+    nextTick(() => {
+      // 先銷毀舊的 grid
+      if (grid) {
+        grid.destroy(false)  // false = 不移除 DOM 元素
+      }
+      
+      // 重新初始化 GridStack
+      grid = GridStack.init({
+        column: 100,
+        cellHeight: 60,
+        margin: 15,
+        animate: true,
+        float: false,
+        disableOneColumnMode: true,
+        minRow: 1,
+        resizable: { handles: 'all' },
+        handle: '.widget-handle',
+        draggable: { handle: '.widget-handle' }
+      }, '.grid-stack')
+    })
+  }
+}
 
 const menuItems = [
   { id: 'dashboard', icon: '📊', label: '儀表板' },
@@ -371,7 +486,14 @@ const menuItems = [
   { id: 'settings', icon: '⚙️', label: '系統設定' },
 ]
 
-const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd: '🔴' }
+// 狀態圖示對照
+const statusIcons = { 
+  clean: '✓', 
+  dirty: '🧹', 
+  inspecting: '🔍', 
+  oos: '🔧',
+  occupied: '🛏️'
+}
 </script>
 
 <template>
@@ -388,7 +510,7 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
           :key="item.id"
           class="nav-item"
           :class="{ active: activeMenu === item.id }"
-          @click="activeMenu = item.id"
+          @click="switchMenu(item.id)"
         >
           <span class="nav-icon">{{ item.icon }}</span>
           <span>{{ item.label }}</span>
@@ -410,9 +532,15 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
       <header class="header">
         <h2>{{ menuItems.find(m => m.id === activeMenu)?.label }}</h2>
         <div class="header-right">
-          <button v-if="activeMenu === 'dashboard'" @click="manualRefresh" class="refresh-btn" title="重新整理">
-            更新
-          </button>
+          <div v-if="activeMenu === 'dashboard'" class="refresh-group">
+            <div class="countdown-timer" :class="{ warning: countdown <= 5 }">
+              <span class="countdown-value">{{ countdown }}</span>
+              <span class="countdown-unit">秒</span>
+            </div>
+            <button @click="manualRefresh" class="refresh-btn" title="重新整理全部資料">
+              更新
+            </button>
+          </div>
           <div class="header-services">
             <div v-for="service in services" :key="service.id" class="header-service-item">
               <span class="service-name-small">{{ service.name }}</span>
@@ -425,55 +553,81 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
       <!-- 儀表板視圖 -->
       <div v-if="activeMenu === 'dashboard'" class="grid-stack">
         <!-- 今日入住 -->
-        <div v-if="widgets[0].visible" class="grid-stack-item" gs-id="checkin" gs-x="0" gs-y="0" gs-w="7" gs-h="2" gs-min-w="4" gs-min-h="2">
+        <div v-if="widgets[0].visible" class="grid-stack-item" gs-id="checkin" gs-x="0" gs-y="0" gs-w="25" gs-h="2" gs-min-w="15" gs-min-h="2">
           <div class="grid-stack-item-content stat-card">
-            <div class="widget-handle">⋮⋮</div>
+            <div class="widget-handle"></div>
             <h3>今日入住</h3>
-            <span class="stat-value">{{ stats.todayCheckin }}</span>
-            <span class="stat-unit">組</span>
+            <div class="stat-row">
+              <span class="stat-value">{{ stats.todayCheckin }}</span>
+              <span class="stat-unit">組</span>
+            </div>
           </div>
         </div>
 
         <!-- 今日退房 -->
-        <div v-if="widgets[1].visible" class="grid-stack-item" gs-id="checkout" gs-x="7" gs-y="0" gs-w="7" gs-h="2" gs-min-w="4" gs-min-h="2">
+        <div v-if="widgets[1].visible" class="grid-stack-item" gs-id="checkout" gs-x="25" gs-y="0" gs-w="25" gs-h="2" gs-min-w="15" gs-min-h="2">
           <div class="grid-stack-item-content stat-card">
-            <div class="widget-handle">⋮⋮</div>
+            <div class="widget-handle"></div>
             <h3>今日退房</h3>
-            <span class="stat-value">{{ stats.todayCheckout }}</span>
-            <span class="stat-unit">組</span>
+            <div class="stat-row">
+              <span class="stat-value">{{ stats.todayCheckout }}</span>
+              <span class="stat-unit">組</span>
+            </div>
           </div>
         </div>
 
         <!-- 住房率 -->
-        <div v-if="widgets[2].visible" class="grid-stack-item" gs-id="occupancy" gs-x="14" gs-y="0" gs-w="7" gs-h="2" gs-min-w="4" gs-min-h="2">
+        <div v-if="widgets[2].visible" class="grid-stack-item" gs-id="occupancy" gs-x="50" gs-y="0" gs-w="25" gs-h="2" gs-min-w="15" gs-min-h="2">
           <div class="grid-stack-item-content stat-card">
-            <div class="widget-handle">⋮⋮</div>
+            <div class="widget-handle"></div>
             <h3>住房率</h3>
-            <span class="stat-value">{{ Math.round(stats.occupiedRooms / stats.totalRooms * 100) }}</span>
-            <span class="stat-unit">%</span>
+            <div class="stat-row">
+              <span class="stat-value">{{ stats.totalRooms > 0 ? Math.round(stats.occupiedRooms / stats.totalRooms * 100) : 0 }}</span>
+              <span class="stat-unit">%</span>
+            </div>
           </div>
         </div>
 
         <!-- 空房數 -->
-        <div v-if="widgets[3].visible" class="grid-stack-item" gs-id="vacant" gs-x="21" gs-y="0" gs-w="7" gs-h="2" gs-min-w="4" gs-min-h="2">
+        <div v-if="widgets[3].visible" class="grid-stack-item" gs-id="vacant" gs-x="75" gs-y="0" gs-w="25" gs-h="2" gs-min-w="15" gs-min-h="2">
           <div class="grid-stack-item-content stat-card">
-            <div class="widget-handle">⋮⋮</div>
+            <div class="widget-handle"></div>
             <h3>空房數</h3>
-            <span class="stat-value">{{ stats.totalRooms - stats.occupiedRooms }}</span>
-            <span class="stat-unit">間</span>
+            <div class="stat-row">
+              <span class="stat-value">{{ stats.totalRooms - stats.occupiedRooms }}</span>
+              <span class="stat-unit">間</span>
+            </div>
           </div>
         </div>
 
-        <!-- 房況面板 -->
+        <!-- 房況面板（只顯示需處理的房間） -->
         <div v-if="widgets[4].visible" class="grid-stack-item" gs-id="rooms" gs-x="0" gs-y="2" gs-w="100" gs-h="4" gs-min-w="12" gs-min-h="3">
           <div class="grid-stack-item-content room-status-panel">
-            <div class="widget-handle">⋮⋮</div>
-            <h3>🏨 即時房況</h3>
-            <div class="room-grid">
-              <div v-for="room in rooms" :key="room.number" class="room-card" :class="room.status">
-                <span class="room-number">{{ room.number }}</span>
-                <span class="room-status-icon">{{ statusIcons[room.status] }}</span>
+            <div class="widget-handle"></div>
+            <h3>
+              🧹 待處理房間 <span class="room-count">({{ dirtyRooms.length }})</span>
+              <div class="status-legend">
+                <span class="legend-item"><span class="dot dirty"></span>髒房</span>
+                <span class="legend-item"><span class="dot inspecting"></span>待檢查</span>
               </div>
+            </h3>
+            <div v-if="roomsLoading" class="loading-text">載入中...</div>
+            <div v-else-if="dirtyRooms.length === 0" class="empty-text">✅ 所有房間皆已清掃完成</div>
+            <div v-else class="room-grid" @mouseleave="hideTooltip">
+              <div v-for="room in dirtyRooms" 
+                   :key="room.number" 
+                   class="room-card" 
+                   :class="room.status" 
+                   @mouseenter="showTooltip(room, $event)" 
+                   @mousemove="moveTooltip"
+                   @mouseleave="hideTooltip">
+                <span class="room-number">{{ room.number }}</span>
+              </div>
+            </div>
+            <!-- 自定義 Tooltip -->
+            <div v-if="hoveredRoom" class="custom-tooltip" :style="{ top: (tooltipPos.y + 15) + 'px', left: (tooltipPos.x + 15) + 'px' }">
+              <span class="tooltip-title">🔧 房間瑕疵紀錄</span>
+              <div class="tooltip-content">{{ hoveredRoom.oos_reason }}</div>
             </div>
           </div>
         </div>
@@ -484,7 +638,7 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
         <div v-if="widgets[5].visible" class="grid-stack-item" :class="{ collapsed: widgets[5].collapsed }" gs-id="guests" gs-x="0" gs-y="6" gs-w="100" gs-h="10" gs-min-w="12" gs-min-h="4">
           <div class="grid-stack-item-content guest-cards-panel">
             <div class="panel-header">
-              <div class="widget-handle">⋮⋮</div>
+              <div class="widget-handle"></div>
               <h3>🏨 入住資訊</h3>
               <div class="guest-tabs">
                 <button :class="{ active: activeGuestTab === 'today' }" @click="activeGuestTab = 'today'">
@@ -505,26 +659,7 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
                 <div v-if="guestsLoading" class="loading-text">載入中...</div>
                 <div v-else-if="todayGuests.length === 0" class="empty-text">今日無入住</div>
                 <div v-else class="guest-cards-list">
-                  <div v-for="g in todayGuests" :key="g.booking_id" class="guest-card" :class="'card-status-' + g.status_code">
-                    <div class="guest-card-header">
-                      <span class="guest-card-name">{{ g.registered_name || g.guest_name }}<span v-if="g.registered_name" class="booking-name-sub">（{{ g.guest_name }}）</span></span>
-                      <span class="guest-card-status" :class="'status-' + g.status_code">{{ g.status_name }}</span>
-                    </div>
-                    <div class="guest-card-details">
-                      <div class="detail-row"><span class="label">房號</span><span class="value">{{ g.room_numbers?.join(', ') || '尚未排房' }}</span></div>
-                      <div class="detail-row"><span class="label">訂單編號</span><span class="value">{{ g.booking_id }}</span></div>
-                      <div class="detail-row"><span class="label">聯絡電話</span><span class="value">{{ g.contact_phone || '-' }}</span></div>
-                      <div class="detail-row"><span class="label">入住日期</span><span class="value">{{ g.check_in_date }}{{ g.nights >= 2 ? ` (${g.nights}晚)` : '' }}</span></div>
-                      <div class="detail-row"><span class="label">退房日期</span><span class="value">{{ g.check_out_date }}</span></div>
-                      <div class="detail-row"><span class="label">訂房來源</span><span class="value">{{ g.booking_source || '未知' }}</span></div>
-                      <div class="detail-row"><span class="label">房型</span><span class="value">{{ g.room_type_name || '尚未分配' }}</span></div>
-                      <div class="detail-row"><span class="label">早餐</span><span class="value">{{ g.breakfast || '依訂單' }}</span></div>
-                      <div class="detail-row"><span class="label">已付訂金</span><span class="value price">NT$ {{ (g.deposit_paid || 0).toLocaleString() }}</span></div>
-                      <div class="detail-row"><span class="label">房價總額</span><span class="value price">NT$ {{ (g.room_total || 0).toLocaleString() }}</span></div>
-                      <div class="detail-row"><span class="label">預計抵達</span><span class="value" :class="{ 'from-bot': g.arrival_time_from_bot }">{{ g.arrival_time_from_bot || '未提供' }}<span v-if="g.arrival_time_from_bot" class="bot-tag">Bot</span></span></div>
-                      <div class="detail-row"><span class="label">LINE 姓名</span><span class="value">{{ g.line_name || '待 AI 處理' }}</span></div>
-                    </div>
-                  </div>
+                  <GuestCard v-for="g in todayGuests" :key="g.booking_id" :guest="g" />
                 </div>
               </div>
               <!-- 昨日入住 -->
@@ -532,26 +667,7 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
                 <div v-if="yesterdayLoading" class="loading-text">載入中...</div>
                 <div v-else-if="yesterdayGuests.length === 0" class="empty-text">昨日無入住</div>
                 <div v-else class="guest-cards-list">
-                  <div v-for="g in yesterdayGuests" :key="g.booking_id" class="guest-card" :class="'card-status-' + g.status_code">
-                    <div class="guest-card-header">
-                      <span class="guest-card-name">{{ g.registered_name || g.guest_name }}<span v-if="g.registered_name" class="booking-name-sub">（{{ g.guest_name }}）</span></span>
-                      <span class="guest-card-status" :class="'status-' + g.status_code">{{ g.status_name }}</span>
-                    </div>
-                    <div class="guest-card-details">
-                      <div class="detail-row"><span class="label">房號</span><span class="value">{{ g.room_numbers?.join(', ') || '尚未排房' }}</span></div>
-                      <div class="detail-row"><span class="label">訂單編號</span><span class="value">{{ g.booking_id }}</span></div>
-                      <div class="detail-row"><span class="label">聯絡電話</span><span class="value">{{ g.contact_phone || '-' }}</span></div>
-                      <div class="detail-row"><span class="label">入住日期</span><span class="value">{{ g.check_in_date }}{{ g.nights >= 2 ? ` (${g.nights}晚)` : '' }}</span></div>
-                      <div class="detail-row"><span class="label">退房日期</span><span class="value">{{ g.check_out_date }}</span></div>
-                      <div class="detail-row"><span class="label">訂房來源</span><span class="value">{{ g.booking_source || '未知' }}</span></div>
-                      <div class="detail-row"><span class="label">房型</span><span class="value">{{ g.room_type_name || '尚未分配' }}</span></div>
-                      <div class="detail-row"><span class="label">早餐</span><span class="value">{{ g.breakfast || '依訂單' }}</span></div>
-                      <div class="detail-row"><span class="label">已付訂金</span><span class="value price">NT$ {{ (g.deposit_paid || 0).toLocaleString() }}</span></div>
-                      <div class="detail-row"><span class="label">房價總額</span><span class="value price">NT$ {{ (g.room_total || 0).toLocaleString() }}</span></div>
-                      <div class="detail-row"><span class="label">預計抵達</span><span class="value" :class="{ 'from-bot': g.arrival_time_from_bot }">{{ g.arrival_time_from_bot || '未提供' }}<span v-if="g.arrival_time_from_bot" class="bot-tag">Bot</span></span></div>
-                      <div class="detail-row"><span class="label">LINE 姓名</span><span class="value">{{ g.line_name || '待 AI 處理' }}</span></div>
-                    </div>
-                  </div>
+                  <GuestCard v-for="g in yesterdayGuests" :key="g.booking_id" :guest="g" />
                 </div>
               </div>
               <!-- 明日入住 -->
@@ -559,26 +675,7 @@ const statusIcons = { vacant: '✓', occupied: '🛏️', cleaning: '🧹', dnd:
                 <div v-if="tomorrowLoading" class="loading-text">載入中...</div>
                 <div v-else-if="tomorrowGuests.length === 0" class="empty-text">明日無入住</div>
                 <div v-else class="guest-cards-list">
-                  <div v-for="g in tomorrowGuests" :key="g.booking_id" class="guest-card" :class="'card-status-' + g.status_code">
-                    <div class="guest-card-header">
-                      <span class="guest-card-name">{{ g.registered_name || g.guest_name }}<span v-if="g.registered_name" class="booking-name-sub">（{{ g.guest_name }}）</span></span>
-                      <span class="guest-card-status" :class="'status-' + g.status_code">{{ g.status_name }}</span>
-                    </div>
-                    <div class="guest-card-details">
-                      <div class="detail-row"><span class="label">房號</span><span class="value">{{ g.room_numbers?.join(', ') || '尚未排房' }}</span></div>
-                      <div class="detail-row"><span class="label">訂單編號</span><span class="value">{{ g.booking_id }}</span></div>
-                      <div class="detail-row"><span class="label">聯絡電話</span><span class="value">{{ g.contact_phone || '-' }}</span></div>
-                      <div class="detail-row"><span class="label">入住日期</span><span class="value">{{ g.check_in_date }}{{ g.nights >= 2 ? ` (${g.nights}晚)` : '' }}</span></div>
-                      <div class="detail-row"><span class="label">退房日期</span><span class="value">{{ g.check_out_date }}</span></div>
-                      <div class="detail-row"><span class="label">訂房來源</span><span class="value">{{ g.booking_source || '未知' }}</span></div>
-                      <div class="detail-row"><span class="label">房型</span><span class="value">{{ g.room_type_name || '尚未分配' }}</span></div>
-                      <div class="detail-row"><span class="label">早餐</span><span class="value">{{ g.breakfast || '依訂單' }}</span></div>
-                      <div class="detail-row"><span class="label">已付訂金</span><span class="value price">NT$ {{ (g.deposit_paid || 0).toLocaleString() }}</span></div>
-                      <div class="detail-row"><span class="label">房價總額</span><span class="value price">NT$ {{ (g.room_total || 0).toLocaleString() }}</span></div>
-                      <div class="detail-row"><span class="label">預計抵達</span><span class="value" :class="{ 'from-bot': g.arrival_time_from_bot }">{{ g.arrival_time_from_bot || '未提供' }}<span v-if="g.arrival_time_from_bot" class="bot-tag">Bot</span></span></div>
-                      <div class="detail-row"><span class="label">LINE 姓名</span><span class="value">{{ g.line_name || '待 AI 處理' }}</span></div>
-                    </div>
-                  </div>
+                  <GuestCard v-for="g in tomorrowGuests" :key="g.booking_id" :guest="g" />
                 </div>
               </div>
             </div>

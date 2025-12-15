@@ -1,6 +1,6 @@
 {
   "name": "ktw-admin-web",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "KTW 飯店管理後台",
   "type": "module",
   "scripts": {
