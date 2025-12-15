@@ -48,3 +48,21 @@ npx pm2 start ecosystem.config.js
 npm install -g pm2
 ```
 安裝後，上述指令中的 `npx pm2` 即可簡化為 `pm2`。
+
+---
+
+## 5. 設定開機自動啟動 (Auto Startup)
+
+若希望電腦重開機後，服務能自動在背景執行，請執行以下兩步：
+
+1.  **註冊開機服務** (需輸入電腦密碼，若無密碼請直接按 Enter)：
+    ```bash
+    sudo env PATH=$PATH:/usr/local/bin /Users/ktw/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 startup launchd -u ktw --hp /Users/ktw
+    ```
+
+2.  **儲存目前狀態** (告訴 PM2 記住現在運行的服務)：
+    ```bash
+    npx pm2 save
+    ```
+
+**注意**：Mac 的 `sudo` 指令通常需要密碼。如果您平常登入不需密碼，請在提示 Password 時**直接按 Enter 鍵**嘗試；若您有設定登入密碼，請輸入該密碼 (輸入時畫面不會顯示任何字元)。
