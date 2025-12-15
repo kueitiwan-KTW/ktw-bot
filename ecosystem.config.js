@@ -7,9 +7,12 @@ module.exports = {
             watch: true,
             env: {
                 NODE_ENV: "production",
-                PORT: 3000
+                PORT: 3000,
+                PMS_API_URL: "http://192.168.8.3:3005/api",
+                // PMS-API is running on remote server (192.168.8.3)
             }
         },
+        /* PMS-API removed: Running on remote server
         {
             name: "PMS-API",
             script: "./server.js",
@@ -19,6 +22,7 @@ module.exports = {
                 PORT: 3005
             }
         },
+        */
         {
             name: "DT-Admin-Web",
             script: "npm",
@@ -38,7 +42,7 @@ module.exports = {
         {
             name: "Ngrok-Tunnel",
             script: "./ngrok",
-            args: "http 5001",
+            args: "http --domain=ktwhotel.com 5001",
             cwd: "./",
             watch: false
         }

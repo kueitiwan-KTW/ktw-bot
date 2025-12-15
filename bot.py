@@ -1171,6 +1171,56 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
             self.user_sessions[user_id] = self.model.start_chat(enable_automatic_function_calling=True)
             return "【客服回覆】\n不好意思，剛才連線有點問題，請您再說一次好嗎？"
 
+    def handle_audio(self, user_id, audio_content, display_name):
+        """
+        處理語音訊息：
+        1. 儲存音訊檔案
+        2. 使用 Gemini 聽打 (Transcribe)
+        3. 將文字送入 generate_response 處理
+        """
+        import tempfile
+        
+        print(f"🎤 收到來自 {display_name} ({user_id}) 的語音訊息")
+        
+        # 1. Save audio to temporary file
+        # LINE audio is usually m4a
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.m4a') as tmp_file:
+            for chunk in audio_content.iter_content():
+                tmp_file.write(chunk)
+            tmp_path = tmp_file.name
+            
+        try:
+            # 2. Upload to Gemini
+            print(f"📤 上傳音訊到 Gemini: {tmp_path}")
+            audio_file = genai.upload_file(path=tmp_path)
+            
+            # 3. Transcribe
+            # Note: We use the Flash model because it's fast and multimodal
+            prompt = "請仔細聆聽這段音訊，並將其精確轉寫為繁體中文（台灣用語）。只需輸出純文字，不要加入任何說明、標點符號以外的額外內容。"
+            
+            response = self.model.generate_content([prompt, audio_file])
+            transcribed_text = response.text.strip()
+            
+            print(f"📝 語音轉文字結果: {transcribed_text}")
+            
+            if not transcribed_text:
+                return "抱歉，我聽不太清楚您的語音訊息，可以請您用文字再說一次嗎？"
+                
+            # 4. Log the voice message
+            self.logger.log(user_id, "User (Voice)", transcribed_text)
+            
+            # 5. Process as Text
+            return self.generate_response(transcribed_text, user_id, display_name)
+            
+        except Exception as e:
+            print(f"❌ Audio processing error: {e}")
+            return "抱歉，語音處理發生錯誤，請稍後再試或直接輸入文字。"
+        finally:
+            # Cleanup local file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+                print("🧹 暫存音訊檔案已清理")
+
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     kb_path = os.path.join(base_dir, "knowledge_base.json")
@@ -1195,3 +1245,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
