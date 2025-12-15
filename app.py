@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageMessage, StickerMessage, StickerSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageMessage, StickerMessage, StickerSendMessage, AudioMessage
 
 # Load environment variables from .env file
 load_dotenv()
@@ -148,6 +148,29 @@ def handle_image(event):
     
     # Generate response using HotelBot's image handler
     reply_text = hotel_bot.handle_image(user_id, image_data, display_name)
+    
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=reply_text)
+    )
+
+@handler.add(MessageEvent, message=AudioMessage)
+def handle_audio_message(event):
+    user_id = event.source.user_id
+    
+    # Get User Profile (Display Name)
+    display_name = None
+    try:
+        profile = line_bot_api.get_profile(user_id)
+        display_name = profile.display_name
+    except Exception as e:
+        print(f"Error getting profile: {e}")
+
+    # Get audio content
+    message_content = line_bot_api.get_message_content(event.message.id)
+    
+    # Generate response using HotelBot's audio handler
+    reply_text = hotel_bot.handle_audio(user_id, message_content, display_name)
     
     line_bot_api.reply_message(
         event.reply_token,
