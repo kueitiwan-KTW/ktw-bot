@@ -16,8 +16,8 @@
 | 檔案名稱 | 用途 | 目標位置 |
 |---------|------|---------|
 | `PMS_INTEGRATION_SUMMARY.md` | **總覽文件**（最重要） | `KTW-bot/docs/` |
-| `pms_api_specification.md` | REST API 完整規格 | `KTW-bot/docs/` |
-| `pms_database_structure.md` | 資料庫結構分析 | `KTW-bot/docs/` |
+| `pms_api_specification.md` | REST API 完整規格 | `KTW-bot/pms-api/` |
+| `PMS-DATABASE-REFERENCE.md` | 資料庫完整參考文件 | `KTW-bot/pms-api/` |
 | `bot_pms_integration_plan.md` | BOT 整合方案 | `KTW-bot/docs/` |
 | `task.md` | 任務清單 | `KTW-bot/docs/` |
 | `implementation_plan.md` | 實作計畫 | `KTW-bot/docs/` |
@@ -68,8 +68,8 @@ mkdir -p admin-dashboard
 ```bash
 # 複製主要文件到 docs/
 cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/PMS_INTEGRATION_SUMMARY.md docs/
-cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/pms_api_specification.md docs/
-cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/pms_database_structure.md docs/
+cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/pms_api_specification.md pms-api/
+cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/PMS-DATABASE-REFERENCE.md pms-api/
 cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/bot_pms_integration_plan.md docs/
 cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/task.md docs/
 cp /Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/implementation_plan.md docs/
@@ -162,8 +162,8 @@ KTW-bot/
 
 ### 相關文件
 - [PMS 整合總覽](docs/PMS_INTEGRATION_SUMMARY.md) - **從這裡開始**
-- [REST API 規格](docs/pms_api_specification.md)
-- [資料庫結構](docs/pms_database_structure.md)
+- [REST API 規格](../pms-api/pms_api_specification.md)
+- [資料庫參考](../pms-api/PMS-DATABASE-REFERENCE.md)
 - [整合方案](docs/bot_pms_integration_plan.md)
 
 ### 專案結構

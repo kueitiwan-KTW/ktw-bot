@@ -49,8 +49,9 @@ class HotelBot:
         else:
             genai.configure(api_key=api_key)
             
-            # 房型對照表 (從 JSON 文件讀取)
-            room_types_path = os.path.join(os.path.dirname(__file__), 'room_types.json')
+            # 房型對照表 (從 data 目錄讀取)
+            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+            room_types_path = os.path.join(data_dir, 'room_types.json')
             self.room_types = self._load_json(room_types_path)
             
             
@@ -1262,7 +1263,8 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    kb_path = os.path.join(base_dir, "knowledge_base.json")
+    data_dir = os.path.join(base_dir, "..", "data")
+    kb_path = os.path.join(data_dir, "knowledge_base.json")
     persona_path = os.path.join(base_dir, "persona.md")
 
     bot = HotelBot(kb_path, persona_path)

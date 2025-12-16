@@ -19,9 +19,14 @@ class GoogleServices:
         
     def authenticate(self):
         """Handles OAuth2 authentication and token management."""
-        if os.path.exists('token.json'):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, '..', 'data')
+        token_path = os.path.join(data_dir, 'token.json')
+        creds_path = os.path.join(data_dir, 'credentials.json')
+
+        if os.path.exists(token_path):
             try:
-                self.creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+                self.creds = Credentials.from_authorized_user_file(token_path, SCOPES)
             except Exception:
                 self.creds = None
 
@@ -34,16 +39,16 @@ class GoogleServices:
                     self.creds = None
             
             if not self.creds:
-                if not os.path.exists('credentials.json'):
-                    print("❌ Error: credentials.json not found!")
+                if not os.path.exists(creds_path):
+                    print(f"❌ Error: credentials.json not found at {creds_path}!")
                     return
 
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
+                    creds_path, SCOPES)
                 self.creds = flow.run_local_server(port=0)
             
             # Save the credentials for the next run
-            with open('token.json', 'w') as token:
+            with open(token_path, 'w') as token:
                 token.write(self.creds.to_json())
         
         print("✅ Google Services Authenticated Successfully!")

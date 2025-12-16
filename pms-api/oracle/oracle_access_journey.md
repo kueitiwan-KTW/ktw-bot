@@ -427,7 +427,7 @@ oracledb.initOracleClient({
 ### 內部文件
 - [Oracle 連接步驟](oracle_connection_steps.md)
 - [PMS API 規格](../pms_api_specification.md)
-- [PMS 數據庫結構](../pms_database_structure.md)
+- [PMS 資料庫參考](../PMS-DATABASE-REFERENCE.md)
 
 ### 外部資源
 - [node-oracledb 文檔](https://node-oracledb.readthedocs.io/)

@@ -49,7 +49,7 @@
 | [oracle_access_guide.md](file:///Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/oracle_access_guide.md) | Oracle 存取指南 | ✅ |
 | [oracle_connection_steps.md](file:///Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/oracle_connection_steps.md) | Oracle 連線步驟 | ✅ |
 | [oracle_sql_commands.md](file:///Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/oracle_sql_commands.md) | SQL 探索指令集 | ✅ |
-| [pms_database_structure.md](file:///Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/pms_database_structure.md) | 資料庫結構分析 | ✅ |
+| [PMS-DATABASE-REFERENCE.md](file:///Users/ktw/KTW-bot/pms-api/PMS-DATABASE-REFERENCE.md) | 資料庫參考文件 | ✅ |
 | [pms_api_specification.md](file:///Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/pms_api_specification.md) | **REST API 完整規格** | ✅ |
 | [bot_pms_integration_plan.md](file:///Users/ktw/.gemini/antigravity/brain/4673da49-130a-4d10-bbd1-466a008cfa73/bot_pms_integration_plan.md) | BOT 整合方案分析 | ✅ |
 
@@ -155,7 +155,7 @@ KTW-bot/
    npm install express oracledb dotenv cors
    ```
 
-2. **實作 API 端點**（參考 `pms_api_specification.md`）
+2. **實作 API 端點**（參考 `../pms-api/pms_api_specification.md`）
    - ✅ GET /api/bookings/search
    - ✅ GET /api/bookings/:id
    - ✅ GET /api/rooms/availability
@@ -317,8 +317,8 @@ NODE_ENV=production
 ## 📞 後續支援
 
 **需要協助時**，參考以下文件：
-- API 開發：`pms_api_specification.md`
-- 資料庫查詢：`pms_database_structure.md`
+- API 開發：`../pms-api/pms_api_specification.md`
+- 資料庫查詢：`../pms-api/PMS-DATABASE-REFERENCE.md`
 - Oracle 連線：`oracle_access_guide.md`
 
 **下一步行動**：

@@ -264,8 +264,8 @@ ORACLE_CLIENT_LIB_DIR=D:\\app\\product\\12.2.0\\dbhome_1\\bin
 
 - [POC 測試程式](../pms-api-poc/README.md)
 - [Oracle 訪問全程記錄](../docs/oracle/oracle_access_journey.md)
-- [PMS 資料庫結構](../docs/pms_database_structure.md)
-- [API 規格](../docs/pms_api_specification.md)
+- [PMS 資料庫參考](./PMS-DATABASE-REFERENCE.md)
+- [API 規格](./pms_api_specification.md)
 
 ## ✍️ 維護資訊
 

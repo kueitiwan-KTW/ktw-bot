@@ -553,5 +553,21 @@ ORDER BY ROOM_COD
 
 ---
 
-*最後更新：2025-12-16*
+
+---
+
+## OTA 訂單編號前綴對照
+
+| 前綴 | 訂房來源 |
+|:-----|:---------|
+| RMAG | Agoda |
+| RMBK | Booking.com |
+| RMEX | Expedia |
+| RMCPT | 攜程 |
+| RMPGP | 德安官網 |
+| 無OTA編號 | 手KEY |
+
+---
+
+*最後更新：2025-12-17*
 *資料來源：PMS Server (192.168.8.3) - GDWUUKT Schema*
