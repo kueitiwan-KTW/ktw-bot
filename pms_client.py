@@ -174,6 +174,95 @@ class PMSClient:
             print(f"❌ PMS API health check error: {e}")
             return False
 
+    # ============================================
+    # 當日預訂相關方法
+    # ============================================
+    
+    def get_today_availability(self) -> Optional[Dict[str, Any]]:
+        """
+        查詢今日可用房型
+        
+        Returns:
+            包含可用房型列表的字典，失敗返回 None
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            url = f"{self.base_url}/rooms/today-availability"
+            print(f"📡 PMS API Request: GET {url}")
+            
+            response = requests.get(url, timeout=self.timeout)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    room_types = data.get('data', {}).get('available_room_types', [])
+                    print(f"✅ 今日可用房型: {len(room_types)} 種")
+                    return data
+                else:
+                    print(f"⚠️ API 回傳 success=false")
+                    return None
+            else:
+                print(f"⚠️ PMS API Error: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ 查詢今日房型失敗: {e}")
+            return None
+    
+    def create_same_day_booking(self, booking_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        建立當日預訂（暫存）
+        
+        Args:
+            booking_data: 包含以下欄位的字典
+                - room_type_code: 房型代碼 (如 'SD', 'VD')
+                - room_type_name: 房型名稱 (如 '經典雙人房')
+                - room_count: 間數
+                - nights: 晚數（當日預訂通常為 1）
+                - guest_name: 客人姓名
+                - phone: 聯絡電話
+                - arrival_time: 預計抵達時間
+                - line_user_id: LINE 用戶 ID（可選）
+                - line_display_name: LINE 顯示名稱（可選）
+        
+        Returns:
+            訂單資訊字典，失敗返回 None
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            url = f"{self.base_url}/bookings/same-day"
+            print(f"📡 PMS API Request: POST {url}")
+            print(f"   Body: {booking_data}")
+            
+            response = requests.post(url, json=booking_data, timeout=self.timeout)
+            
+            if response.status_code == 200 or response.status_code == 201:
+                data = response.json()
+                if data.get('success'):
+                    order_id = data.get('data', {}).get('temp_order_id')
+                    print(f"✅ 當日預訂成功: {order_id}")
+                    return data
+                else:
+                    error_msg = data.get('error', {}).get('message', '未知錯誤')
+                    print(f"⚠️ 建立預訂失敗: {error_msg}")
+                    return None
+            elif response.status_code == 400:
+                data = response.json()
+                error_msg = data.get('error', {}).get('message', '參數錯誤')
+                print(f"⚠️ 參數錯誤: {error_msg}")
+                return None
+            else:
+                print(f"⚠️ PMS API Error: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ 建立當日預訂失敗: {e}")
+            return None
+
 
 # 测试代码
 if __name__ == "__main__":

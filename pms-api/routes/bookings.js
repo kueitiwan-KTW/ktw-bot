@@ -34,7 +34,12 @@ router.get('/search', async (req, res) => {
             let sql = `
         SELECT 
           TRIM(om.IKEY) as booking_id,
-          om.CUST_NAM as guest_name,
+          CASE 
+            WHEN LENGTH(TRIM(om.GALT_NAM)) > 0 THEN TRIM(om.GALT_NAM)
+            WHEN LENGTH(TRIM(om.GLAST_NAM)) > 0 OR LENGTH(TRIM(om.GFIRST_NAM)) > 0 
+              THEN TRIM(NVL(om.GLAST_NAM,'') || NVL(om.GFIRST_NAM,''))
+            ELSE om.CUST_NAM
+          END as guest_name,
           om.CONTACT1_RMK as contact_phone,
           TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
           TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
@@ -188,7 +193,12 @@ router.get('/today-checkout', async (req, res) => {
             const result = await connection.execute(`
                 SELECT 
                     TRIM(om.IKEY) as booking_id,
-                    om.CUST_NAM as guest_name,
+                    CASE 
+                      WHEN LENGTH(TRIM(om.GALT_NAM)) > 0 THEN TRIM(om.GALT_NAM)
+                      WHEN LENGTH(TRIM(om.GLAST_NAM)) > 0 OR LENGTH(TRIM(om.GFIRST_NAM)) > 0 
+                        THEN TRIM(NVL(om.GLAST_NAM,'') || NVL(om.GFIRST_NAM,''))
+                      ELSE om.CUST_NAM
+                    END as guest_name,
                     om.CONTACT1_RMK as contact_phone,
                     TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
                     TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
@@ -287,6 +297,226 @@ router.get('/tomorrow-checkin', async (req, res) => {
 
 
 /**
+ * GET /api/bookings/test-write-permission
+ * 測試 PMS 資料庫寫入權限（開發用）
+ * 
+ * 注意：此端點必須放在 /:booking_id 之前，否則會被通用路由攔截
+ */
+router.get('/test-write-permission', async (req, res) => {
+    try {
+        const pool = db.getPool();
+        const connection = await pool.getConnection();
+        const results = {
+            timestamp: new Date().toISOString(),
+            tests: []
+        };
+
+        try {
+            // 測試 1: 查詢最大訂單號
+            const maxKeyResult = await connection.execute(`
+                SELECT MAX(TRIM(IKEY)) as max_ikey FROM GDWUUKT.ORDER_MN
+            `);
+            results.tests.push({
+                name: '查詢最大訂單號',
+                success: true,
+                result: maxKeyResult.rows[0]?.[0] || 'N/A'
+            });
+
+            // 測試 2: 查詢 ORDER_MN 必填欄位
+            const colsResult = await connection.execute(`
+                SELECT COLUMN_NAME, DATA_TYPE, NULLABLE
+                FROM ALL_TAB_COLUMNS 
+                WHERE OWNER = 'GDWUUKT' AND TABLE_NAME = 'ORDER_MN' AND NULLABLE = 'N'
+                ORDER BY COLUMN_ID
+            `);
+            results.tests.push({
+                name: 'ORDER_MN 必填欄位',
+                success: true,
+                result: colsResult.rows.map(r => `${r[0]} (${r[1]})`)
+            });
+
+            // 測試 3: 嘗試 INSERT (會立即 ROLLBACK)
+            try {
+                const testOrderId = 'TEST99999';
+                await connection.execute(`
+                    INSERT INTO GDWUUKT.ORDER_MN (IKEY, CI_DAT, CO_DAT, ORDER_STA, CUST_NAM)
+                    VALUES (:ikey, SYSDATE, SYSDATE+1, 'N', 'TEST_WRITE_BOT')
+                `, { ikey: testOrderId });
+
+                await connection.rollback();
+                results.tests.push({
+                    name: 'INSERT 測試',
+                    success: true,
+                    result: '✅ 有寫入權限！(已 ROLLBACK)'
+                });
+                results.has_write_permission = true;
+            } catch (insertErr) {
+                results.tests.push({
+                    name: 'INSERT 測試',
+                    success: false,
+                    error: insertErr.message
+                });
+                results.has_write_permission = false;
+            }
+
+            res.json({
+                success: true,
+                data: results
+            });
+
+        } finally {
+            await connection.close();
+        }
+
+    } catch (err) {
+        console.error('測試寫入權限失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'TEST_ERROR',
+                message: err.message
+            }
+        });
+    }
+});
+
+
+/**
+ * GET /api/bookings/same-day-list
+ * 查詢當日暫存訂單列表（供 Admin Dashboard 使用）
+ * 
+ * 注意：此端點必須放在 /:booking_id 之前，否則會被通用路由攔截
+ */
+router.get('/same-day-list', async (req, res) => {
+    try {
+        const dataDir = path.join(__dirname, '..', 'data');
+        const filePath = path.join(dataDir, 'same_day_bookings.json');
+
+        let bookings = [];
+        if (fs.existsSync(filePath)) {
+            try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                bookings = JSON.parse(content);
+            } catch (e) {
+                bookings = [];
+            }
+        }
+
+        // 只回傳今日的訂單
+        const today = new Date().toISOString().slice(0, 10);
+        const todayBookings = bookings.filter(b => b.check_in_date === today);
+
+        res.json({
+            success: true,
+            data: {
+                date: today,
+                total: todayBookings.length,
+                bookings: todayBookings.map(b => ({
+                    order_id: b.temp_order_id,
+                    room_type_code: b.room_type_code,
+                    room_type_name: b.room_type_name,
+                    room_count: b.room_count,
+                    nights: b.nights,
+                    guest_name: b.guest_name,
+                    phone: b.phone,
+                    arrival_time: b.arrival_time,
+                    check_in_date: b.check_in_date,
+                    check_out_date: b.check_out_date,
+                    status: b.status,
+                    created_at: b.created_at,
+                    line_display_name: b.line_display_name
+                }))
+            }
+        });
+
+    } catch (err) {
+        console.error('查詢暫存訂單失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'READ_ERROR',
+                message: '讀取暫存訂單時發生錯誤'
+            }
+        });
+    }
+});
+
+/**
+ * PATCH /api/bookings/same-day/:order_id/checkin
+ * 標記暫存訂單為已 KEY（已入住）
+ * 
+ * 注意：此端點必須放在 /:booking_id 之前
+ */
+router.patch('/same-day/:order_id/checkin', async (req, res) => {
+    try {
+        const { order_id } = req.params;
+        const dataDir = path.join(__dirname, '..', 'data');
+        const filePath = path.join(dataDir, 'same_day_bookings.json');
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: '找不到暫存訂單檔案'
+                }
+            });
+        }
+
+        let bookings = [];
+        try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            bookings = JSON.parse(content);
+        } catch (e) {
+            return res.status(500).json({
+                success: false,
+                error: {
+                    code: 'READ_ERROR',
+                    message: '讀取暫存訂單失敗'
+                }
+            });
+        }
+
+        const orderIndex = bookings.findIndex(b => b.temp_order_id === order_id);
+        if (orderIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: `找不到訂單編號 ${order_id}`
+                }
+            });
+        }
+
+        bookings[orderIndex].status = 'checked_in';
+        bookings[orderIndex].checked_in_at = new Date().toISOString();
+        fs.writeFileSync(filePath, JSON.stringify(bookings, null, 2), 'utf8');
+
+        console.log(`✅ 暫存訂單已標記為 KEY：${order_id}`);
+
+        res.json({
+            success: true,
+            data: {
+                order_id: order_id,
+                status: 'checked_in',
+                message: '已標記為已 KEY 單'
+            }
+        });
+
+    } catch (err) {
+        console.error('標記訂單失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'UPDATE_ERROR',
+                message: '更新訂單狀態時發生錯誤'
+            }
+        });
+    }
+});
+
+
+/**
  * GET /api/bookings/:booking_id
  * 查詢單一訂單詳細資訊
  */
@@ -302,7 +532,12 @@ router.get('/:booking_id', async (req, res) => {
             const orderResult = await connection.execute(
                 `SELECT 
            TRIM(om.IKEY) as booking_id,
-           om.CUST_NAM as guest_name,
+           CASE 
+             WHEN LENGTH(TRIM(om.GALT_NAM)) > 0 THEN TRIM(om.GALT_NAM)
+             WHEN LENGTH(TRIM(om.GLAST_NAM)) > 0 OR LENGTH(TRIM(om.GFIRST_NAM)) > 0 
+               THEN TRIM(NVL(om.GLAST_NAM,'') || NVL(om.GFIRST_NAM,''))
+             ELSE om.CUST_NAM
+           END as guest_name,
            om.CONTACT1_RMK as contact_phone,
            TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
            TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
@@ -384,5 +619,124 @@ router.get('/:booking_id', async (req, res) => {
     }
 });
 
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * POST /api/bookings/same-day
+ * 建立當日預訂訂單（暫存方案）
+ * 由於 PMS 資料庫寫入權限尚未確認，先暫存至本地 JSON 檔案
+ * 生成臨時訂單編號供追蹤
+ */
+router.post('/same-day', async (req, res) => {
+    try {
+        const {
+            room_type_code,
+            room_type_name,
+            room_count,
+            nights,
+            guest_name,
+            phone,
+            arrival_time,
+            line_user_id,
+            line_display_name
+        } = req.body;
+
+        // 驗證必填欄位
+        if (!room_type_code || !room_count || !guest_name || !phone || !arrival_time) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'MISSING_PARAMETER',
+                    message: '請提供房型、間數、姓名、電話、抵達時間'
+                }
+            });
+        }
+
+        // 生成臨時訂單編號：SD + 日期 + 序號
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const timeStr = today.toTimeString().slice(0, 8).replace(/:/g, '');
+        const tempOrderId = `SD${dateStr}${timeStr}`;
+
+        // 計算入住與退房日期
+        const checkInDate = today.toISOString().slice(0, 10);
+        const checkOutDate = new Date(today.getTime() + (nights || 1) * 24 * 60 * 60 * 1000)
+            .toISOString().slice(0, 10);
+
+        // 建立訂單資料
+        const orderData = {
+            temp_order_id: tempOrderId,
+            room_type_code,
+            room_type_name: room_type_name || room_type_code,
+            room_count: parseInt(room_count) || 1,
+            nights: parseInt(nights) || 1,
+            guest_name,
+            phone,
+            arrival_time,
+            check_in_date: checkInDate,
+            check_out_date: checkOutDate,
+            line_user_id: line_user_id || null,
+            line_display_name: line_display_name || null,
+            status: 'pending',  // 待處理（需人工確認）
+            created_at: today.toISOString(),
+            notes: '⚠️ 當日預訂 - 免訂金 - 需客人準時抵達'
+        };
+
+        // 暫存至 JSON 檔案（PMS 整合後可改為直接寫入資料庫）
+        const dataDir = path.join(__dirname, '..', 'data');
+        const filePath = path.join(dataDir, 'same_day_bookings.json');
+
+        // 確保目錄存在
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+
+        // 讀取現有資料
+        let bookings = [];
+        if (fs.existsSync(filePath)) {
+            try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                bookings = JSON.parse(content);
+            } catch (e) {
+                bookings = [];
+            }
+        }
+
+        // 新增訂單
+        bookings.push(orderData);
+        fs.writeFileSync(filePath, JSON.stringify(bookings, null, 2), 'utf8');
+
+        console.log(`📝 當日預訂已建立：${tempOrderId} - ${guest_name} - ${room_type_name} x${room_count}`);
+
+        res.json({
+            success: true,
+            data: {
+                order_id: tempOrderId,
+                guest_name,
+                room_type_name: orderData.room_type_name,
+                room_count: orderData.room_count,
+                nights: orderData.nights,
+                check_in_date: checkInDate,
+                check_out_date: checkOutDate,
+                arrival_time,
+                status: 'pending',
+                message: '訂單已成立，請準時抵達辦理入住'
+            }
+        });
+
+    } catch (err) {
+        console.error('建立當日預訂失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'CREATE_ERROR',
+                message: '建立訂單時發生錯誤，請稍後再試或聯繫櫃檯'
+            }
+        });
+    }
+});
 
 module.exports = router;
+
+

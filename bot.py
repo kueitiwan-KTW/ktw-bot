@@ -14,6 +14,7 @@ from gmail_helper import GmailHelper
 from chat_logger import ChatLogger
 from weather_helper import WeatherHelper
 from pms_client import PMSClient
+from same_day_booking import SameDayBookingHandler
 
 class HotelBot:
     def __init__(self, knowledge_base_path, persona_path):
@@ -29,6 +30,9 @@ class HotelBot:
         
         # Initialize PMS Client
         self.pms_client = PMSClient()
+        
+        # Initialize Same Day Booking Handler
+        self.same_day_handler = SameDayBookingHandler(self.pms_client)
         
         # Initialize Logger
         self.logger = ChatLogger()
@@ -1088,6 +1092,18 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
 
         # Log User Input
         self.logger.log(user_id, "User", user_question)
+
+        # ============================================
+        # 當日預訂處理器攔截（優先處理）
+        # ============================================
+        # 檢查是否正在進行當日預訂流程，或是否為新的當日預訂意圖
+        if self.same_day_handler.is_in_booking_flow(user_id) or self.same_day_handler.is_same_day_intent(user_question):
+            same_day_response = self.same_day_handler.handle_message(user_id, user_question, display_name)
+            if same_day_response:
+                # 記錄 Bot 回覆
+                self.logger.log(user_id, "Bot", same_day_response)
+                return same_day_response
+        # ============================================
 
         # Check for pending context (e.g. Order ID from previous image)
         context = self.user_context.get(user_id, {})
