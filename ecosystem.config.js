@@ -42,7 +42,7 @@ module.exports = {
         {
             name: "Ngrok-Tunnel",
             script: "./ngrok",
-            args: "http --domain=ktwhotel.com 5001",
+            args: "http 5001",
             cwd: "./",
             watch: false
         }

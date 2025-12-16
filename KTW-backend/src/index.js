@@ -65,11 +65,7 @@ function matchGuestOrder(booking, guestOrders) {
 
 // 🔄 共用的訂單資料處理函數（供今日/昨日/明日 API 使用）
 function processBookings(bookings, guestOrders) {
-    const roomTypeMap = {
-        'SD': '標準雙人房', 'SQ': '標準四人房', 'VD': '景觀雙人房',
-        'VQ': '景觀四人房', 'PH': '閣樓房', 'WD': '溫馨雙人房',
-        'WQ': '溫馨四人房', 'FD': '家庭雙人房', 'FQ': '家庭四人房'
-    };
+    // 使用全域的 roomTypeMap（DRY 原則 - 避免重複定義）
 
     return bookings.map(booking => {
         // 1. OTA 訂單號
@@ -517,6 +513,50 @@ app.get('/api/pms/rooms/status', async (req, res) => {
     } catch (error) {
         console.error('房間狀態 API 錯誤:', error);
         res.status(500).json({ success: false, error: error.message, data: { stats: {}, rooms: [] } });
+    }
+});
+
+// ============================================
+// LINE 當日預訂 (暫存訂單 API)
+// ============================================
+
+// 取得當日暫存訂單列表
+app.get('/api/pms/same-day-bookings', async (req, res) => {
+    try {
+        const response = await fetch('http://192.168.8.3:3000/api/v1/bookings/same-day-list', {
+            signal: AbortSignal.timeout(5000)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            res.json(data);
+        } else {
+            res.status(response.status).json({ success: false, error: 'PMS API error' });
+        }
+    } catch (error) {
+        console.error('暫存訂單 API 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message, data: { bookings: [] } });
+    }
+});
+
+// 標記暫存訂單為已 KEY
+app.patch('/api/pms/same-day-bookings/:order_id/checkin', async (req, res) => {
+    try {
+        const { order_id } = req.params;
+        const response = await fetch(`http://192.168.8.3:3000/api/v1/bookings/same-day/${order_id}/checkin`, {
+            method: 'PATCH',
+            signal: AbortSignal.timeout(5000)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            res.json(data);
+        } else {
+            res.status(response.status).json({ success: false, error: 'PMS API error' });
+        }
+    } catch (error) {
+        console.error('標記訂單 API 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

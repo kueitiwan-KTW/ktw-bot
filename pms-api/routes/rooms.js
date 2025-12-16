@@ -84,6 +84,103 @@ router.get('/availability', async (req, res) => {
 });
 
 /**
+ * GET /api/rooms/today-availability
+ * 查詢今日可預訂房型（當日預訂專用）
+ * 使用 WRS_STOCK_DT（網路庫存）和 RMINV_MN（館內庫存）
+ */
+router.get('/today-availability', async (req, res) => {
+    try {
+        const pool = db.getPool();
+        const connection = await pool.getConnection();
+
+        try {
+            // 使用 Oracle SYSDATE 取得今日日期（自動校正時區）
+            const dateResult = await connection.execute(`
+                SELECT TO_CHAR(SYSDATE, 'YYYY-MM-DD') as today FROM DUAL
+            `);
+            const today = dateResult.rows[0][0];
+
+            // 查詢 WRS_STOCK_DT（網路庫存）、RMINV_MN（館內庫存）
+            // 價格優先使用 WRS_ROOM_PRICE（按日期價格），若無則使用 RATECOD_DT（web001 固定價）
+            const result = await connection.execute(`
+                SELECT 
+                    TRIM(w.ROOM_COD) as room_type_code,
+                    rf.ROOM_NAM as room_type_name,
+                    w.STOCK_QNT as web_stock,
+                    w.USE_QNT as web_used,
+                    (w.STOCK_QNT - w.USE_QNT) as web_available,
+                    NVL(r.LEFT_QNT, 0) as local_stock,
+                    NVL(r.ROOM_QNT, 0) as total_rooms,
+                    COALESCE(p.PAY_TOT, p2.RENT_AMT, 0) as price
+                FROM GDWUUKT.WRS_STOCK_DT w
+                LEFT JOIN GDWUUKT.RMINV_MN r 
+                    ON TRIM(w.ROOM_COD) = TRIM(r.ROOM_COD) 
+                    AND TRUNC(w.BATCH_DAT) = TRUNC(r.BATCH_DAT)
+                LEFT JOIN GDWUUKT.ROOM_RF rf 
+                    ON TRIM(w.ROOM_COD) = TRIM(rf.ROOM_TYP)
+                LEFT JOIN GDWUUKT.WRS_ROOM_PRICE p
+                    ON TRIM(w.ROOM_COD) = TRIM(p.ROOM_COD)
+                    AND TRUNC(p.CI_DAT) = TO_DATE(:today, 'YYYY-MM-DD')
+                    AND p.DAYS = 1
+                    AND TRIM(p.PRODUCT_NOS) = '20001901'
+                LEFT JOIN GDWUUKT.RATECOD_DT p2
+                    ON TRIM(w.ROOM_COD) = TRIM(p2.ROOM_COD)
+                    AND p2.KEY IN (SELECT KEY FROM GDWUUKT.RATECOD_MN WHERE TRIM(RATE_COD) = 'web001')
+                WHERE TRUNC(w.BATCH_DAT) = TO_DATE(:today, 'YYYY-MM-DD')
+                ORDER BY w.ROOM_COD
+            `, { today });
+
+            // 過濾出有網路庫存或館內庫存的房型
+            const availableRoomTypes = result.rows
+                .filter(row => {
+                    const webAvailable = row[4] || 0;  // web_available
+                    const localStock = row[5] || 0;    // local_stock
+                    return webAvailable > 0 || localStock > 0;
+                })
+                .map(row => ({
+                    room_type_code: row[0],
+                    room_type_name: row[1] || row[0],
+                    web_available: row[4] || 0,    // 網路可訂
+                    local_stock: row[5] || 0,      // 館內庫存
+                    available_count: (row[4] || 0) + (row[5] || 0),  // 總可用
+                    price: row[7] || 0             // 官網優惠價
+                }));
+
+            // 計算總數
+            const totalWebAvailable = availableRoomTypes.reduce((sum, r) => sum + r.web_available, 0);
+            const totalLocalStock = availableRoomTypes.reduce((sum, r) => sum + r.local_stock, 0);
+
+            res.json({
+                success: true,
+                data: {
+                    date: today,
+                    available_room_types: availableRoomTypes,
+                    summary: {
+                        web_available: totalWebAvailable,
+                        local_stock: totalLocalStock,
+                        total_available: totalWebAvailable + totalLocalStock
+                    },
+                    has_availability: availableRoomTypes.length > 0
+                }
+            });
+
+        } finally {
+            await connection.close();
+        }
+
+    } catch (err) {
+        console.error('查詢今日可用房型失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'DATABASE_ERROR',
+                message: '查詢今日可用房型時發生錯誤'
+            }
+        });
+    }
+});
+
+/**
  * GET /api/rooms/explore
  * 探索房間相關資料表結構（開發用）
  */
