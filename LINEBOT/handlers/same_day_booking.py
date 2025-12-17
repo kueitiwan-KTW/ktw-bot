@@ -19,6 +19,8 @@ class SameDayBookingHandler:
     STATE_COLLECT_ROOM = 'collect_room'     # 收集房型選擇
     STATE_COLLECT_COUNT = 'collect_count'   # 收集房間數量
     STATE_COLLECT_BED = 'collect_bed'       # 收集床型
+    STATE_MULTI_BED_SELECT = 'multi_bed_select'  # 多房型逐一選擇床型
+    STATE_COLLECT_REQUESTS = 'collect_requests'  # 收集特殊需求
     STATE_COLLECT_INFO = 'collect_info'     # 收集客人資訊
     STATE_CONFIRM = 'confirm'               # 確認預訂
     STATE_COMPLETE = 'complete'             # 完成
@@ -233,7 +235,7 @@ class SameDayBookingHandler:
     
     def _is_invalid_arrival_time(self, arrival_time: str) -> bool:
         """
-        檢查抵達時間是否無效（超過晚上10點或隔日）
+        檢查抵達時間是否無效（超過晚上10點或已過的時間）
         
         Args:
             arrival_time: 客人輸入的抵達時間字串
@@ -242,11 +244,21 @@ class SameDayBookingHandler:
             True 如果時間無效
         """
         import re
+        from datetime import datetime
+        
+        current_hour = datetime.now().hour
         
         # 檢查是否包含隔日關鍵字
         tomorrow_keywords = ['明天', '明日', '隔天', '隔日', '凌晨']
         if any(kw in arrival_time for kw in tomorrow_keywords):
             return True
+        
+        # 特殊格式：馬上到、等等到、X分鐘後 都視為有效
+        if any(kw in arrival_time for kw in ['馬上', '等等', '現在', '待會', '分鐘後']):
+            # 但如果已經超過晚上10點，則無效
+            if current_hour >= 22:
+                return True
+            return False
         
         # 嘗試解析小時
         hour_match = re.search(r'(\d{1,2})', arrival_time)
@@ -257,11 +269,8 @@ class SameDayBookingHandler:
         
         # 判斷上午/下午/晚上
         if '晚上' in arrival_time or '晚間' in arrival_time:
-            # 晚上10點以後無效
-            if hour >= 10 and hour < 12:
-                return True
-            # 晚上11、12點無效
-            if hour == 11 or hour == 12:
+            # 晚上格式：晚上7點=19:00, 晚上10點=22:00
+            if hour >= 10:  # 晚上10點以後無效
                 return True
         elif '下午' in arrival_time or '傍晚' in arrival_time:
             # 下午轉為24小時制
@@ -269,14 +278,60 @@ class SameDayBookingHandler:
                 hour += 12
             if hour >= 22:
                 return True
+        elif '上午' in arrival_time or '早上' in arrival_time:
+            # 如果已經過了上午時間，則無效
+            if hour < current_hour:
+                return True
+            return False
+        elif '中午' in arrival_time:
+            if current_hour > 13:  # 已經過了中午
+                return True
+            return False
         else:
-            # 沒有前綴，根據數字判斷
-            # 22點以後無效
+            # 沒有前綴，根據當前時間智能判斷
+            # 原則：客人說的時間一定是「未來的時間」
+            
+            # 24小時制：22-23 和 0-5 無效（太晚或凌晨）
             if hour >= 22 or hour == 0:
                 return True
-            # 凌晨1-6點視為隔日
-            if 1 <= hour <= 6:
+            if 1 <= hour <= 5:
                 return True
+            
+            # 智能判斷：如果說的時間早於現在，可能是指下午/晚上
+            # 例如：現在11點，客人說6點 -> 應該是下午6點(18:00)
+            if hour < current_hour:
+                # 檢查加12小時後是否有效（不超過22點）
+                adjusted_hour = hour + 12
+                if adjusted_hour >= 22:
+                    return True  # 太晚了
+                # 否則視為有效（會智能理解為下午）
+                return False
+            
+            # 時間在當前時間之後，直接有效
+        
+        return False
+    
+    def _is_vague_arrival_time(self, arrival_time: str) -> bool:
+        """
+        檢查抵達時間是否模糊（只有時段沒有具體時間）
+        
+        Args:
+            arrival_time: 客人輸入的抵達時間字串
+            
+        Returns:
+            True 如果時間模糊需要再確認
+        """
+        import re
+        
+        # 如果只有時段詞，沒有具體數字，就是模糊的
+        vague_only_keywords = ['傍晚', '中午', '下午', '晚上', '早上', '上午']
+        
+        # 檢查是否有數字
+        has_number = bool(re.search(r'\d', arrival_time))
+        
+        if not has_number:
+            # 沒有數字，只有時段詞，需要確認
+            return any(kw in arrival_time for kw in vague_only_keywords)
         
         return False
     
@@ -352,6 +407,22 @@ class SameDayBookingHandler:
                 return "好的，如有需要隨時再詢問！"
             # 收集床型
             return self._handle_bed_selection(user_id, session, message)
+        
+        elif state == self.STATE_MULTI_BED_SELECT:
+            # 檢查是否要中斷
+            if self._is_interrupt_intent(message):
+                self.clear_session(user_id, save_interrupted=True)
+                return "好的，如有需要隨時再詢問！"
+            # 多房型逐一選擇床型
+            return self._handle_multi_bed_select(user_id, session, message)
+        
+        elif state == self.STATE_COLLECT_REQUESTS:
+            # 檢查是否要中斷
+            if self._is_interrupt_intent(message):
+                self.clear_session(user_id, save_interrupted=True)
+                return "好的，如有需要隨時再詢問！"
+            # 收集特殊需求
+            return self._handle_requests_collection(user_id, session, message)
         
         elif state == self.STATE_COLLECT_INFO:
             # 檢查是否要中斷
@@ -559,12 +630,18 @@ class SameDayBookingHandler:
     def _parse_multi_room_input(self, message: str) -> list:
         """
         解析多房型輸入
-        支援格式：1間雙人1間三人、2間雙人房1間四人房、1雙人2三人
+        支援格式：1間雙人1間三人、2間雙人房1間四人房、1雙人2三人、兩間雙人、一間四人
         
         Returns:
             list of {'room': room_dict, 'count': int} or None
         """
         import re
+        
+        # 中文數字對照
+        chinese_numbers = {
+            '一': 1, '二': 2, '兩': 2, '三': 3, '四': 4, '五': 5,
+            '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+        }
         
         # 房型關鍵字對照
         room_keywords = {
@@ -580,8 +657,9 @@ class SameDayBookingHandler:
             '4人': 4,
         }
         
-        # 嘗試匹配 "數量+房型" 模式
-        pattern = r'(\d+)\s*間?\s*(雙人房?|兩人|2人|三人房?|3人|四人房?|4人)'
+        # 嘗試匹配 「數量+間+房型」 模式，支援阿拉伯數字和中文數字
+        # 匹配：1間雙人、兩間雙人、2雙人房 等
+        pattern = r'([一二兩三四五六七八九十\d]+)\s*間?\s*(雙人房?|兩人|2人|三人房?|3人|四人房?|4人)'
         matches = re.findall(pattern, message)
         
         if not matches:
@@ -589,7 +667,14 @@ class SameDayBookingHandler:
         
         results = []
         for count_str, room_type in matches:
-            count = int(count_str)
+            # 解析數量（支援中文數字）
+            if count_str in chinese_numbers:
+                count = chinese_numbers[count_str]
+            elif count_str.isdigit():
+                count = int(count_str)
+            else:
+                continue
+                
             if count <= 0:
                 continue
                 
@@ -657,21 +742,32 @@ class SameDayBookingHandler:
 建議您可以查看其他日期的空房：
 🌐 https://ktwhotel.com/2cTrT"""
         
-        # 庫存充足，顯示確認資訊
+        # 庫存充足，顯示確認資訊並進入床型選擇
         session['total_price'] = total_price
+        
+        # 初始化床型選擇進度
+        session['multi_bed_index'] = 0  # 當前要選擇床型的房型索引
+        session['multi_bed_types'] = {}  # 儲存每個房型的床型選擇 {idx: bed_type}
+        session['state'] = self.STATE_MULTI_BED_SELECT
+        
+        room_list = "\n".join(order_lines)
+        
+        # 取得第一個房型的床型選項
+        first_order = orders[0]
+        first_room = first_order['room']
+        beds = first_room.get('beds', [])
+        bed_options = "\n".join([f"{i+1}. {bed}" for i, bed in enumerate(beds)])
         
         return f"""好的，已確認您要預訂：
 
-{chr(10).join(order_lines)}
+{room_list}
 ━━━━━━━━━━━━━━━
 💰 總計：NT${total_price:,}（含早餐）
 
-請提供以下資訊以完成預訂：
-1️⃣ 您的姓名
-2️⃣ 聯絡電話
-3️⃣ 預計抵達時間
+🛏️ 請選擇【{first_room['name']}】的床型：
+{bed_options}
 
-（您可以一次提供，例如：王小明、0912345678、晚上7點）"""
+（請輸入數字選擇）"""
     
     def _handle_count_collection(self, user_id: str, session: Dict, message: str) -> str:
         """處理房間數量收集"""
@@ -780,15 +876,22 @@ class SameDayBookingHandler:
             if accessible_only and any(code in self.ACCESSIBLE_ROOMS for code in available_types):
                 accessible_notice = "\n\n⚠️ 目前僅剩無障礙房型，此房型只有淋浴間為無障礙設計，其餘房內設施與一般房間相同。"
             
+            # 進入特殊需求詢問狀態
+            session['state'] = self.STATE_COLLECT_REQUESTS
+            
             return f"""好的，已確認：
 🏨 {selected_room['name']}{bed_info} x {room_count} 間{accessible_notice}
 
-請提供以下資訊以完成預訂：
-1️⃣ 您的姓名
-2️⃣ 聯絡電話
-3️⃣ 預計抵達時間
+━━━━━━━━━━━━━━━
+是否有其他特殊需求？
 
-（您可以一次提供，例如：王小明、0912345678、晚上7點）"""
+常見需求：
+• 嬰兒床
+• 嬰兒澡盆
+• 消毒鍋
+• 無障礙房
+
+（沒有請輸入「無」或「沒有」，有需求請直接說明）"""
         else:
             # 庫存不足
             self.clear_session(user_id)
@@ -797,57 +900,232 @@ class SameDayBookingHandler:
 建議您可以查看其他日期的空房：
 🌐 https://ktwhotel.com/2cTrT"""
     
+    def _handle_multi_bed_select(self, user_id: str, session: Dict, message: str) -> str:
+        """處理多房型逐一選擇床型"""
+        orders = session.get('multi_room_orders', [])
+        current_idx = session.get('multi_bed_index', 0)
+        
+        if current_idx >= len(orders):
+            # 所有床型已選擇完成，進入收集資訊階段
+            session['state'] = self.STATE_COLLECT_INFO
+            return """所有床型已選擇完成！
+
+請提供以下資訊以完成預訂：
+1️⃣ 您的姓名
+2️⃣ 聯絡電話
+3️⃣ 預計抵達時間
+
+（您可以一次提供，例如：王小明、0912345678、晚上7點）"""
+        
+        current_order = orders[current_idx]
+        current_room = current_order['room']
+        beds = current_room.get('beds', [])
+        
+        # 解析用戶選擇的床型
+        message_clean = message.strip()
+        
+        selected_bed = None
+        
+        # 數字選擇 (1, 2, ...)
+        if message_clean.isdigit():
+            idx = int(message_clean) - 1
+            if 0 <= idx < len(beds):
+                selected_bed = beds[idx]
+        
+        # 也支援直接輸入床型名稱
+        if not selected_bed:
+            for bed in beds:
+                if bed in message or message in bed:
+                    selected_bed = bed
+                    break
+        
+        if not selected_bed:
+            bed_options = "\n".join([f"{i+1}. {bed}" for i, bed in enumerate(beds)])
+            return f"""請選擇有效的床型：
+{bed_options}
+
+（請輸入數字選擇）"""
+        
+        # 儲存床型選擇
+        session['multi_bed_types'][current_idx] = selected_bed
+        
+        # 更新到 orders 中（用於建立訂單時）
+        orders[current_idx]['bed_type'] = selected_bed
+        
+        # 移到下一個房型
+        next_idx = current_idx + 1
+        session['multi_bed_index'] = next_idx
+        
+        if next_idx >= len(orders):
+            # 所有床型已選擇完成，進入特殊需求詢問
+            session['state'] = self.STATE_COLLECT_REQUESTS
+            
+            # 顯示選擇結果摘要
+            summary_lines = []
+            for i, order in enumerate(orders):
+                room_name = order['room']['name']
+                bed_type = session['multi_bed_types'].get(i, '預設')
+                summary_lines.append(f"• {room_name}: {bed_type}")
+            
+            return f"""✅ 床型選擇完成！
+
+{chr(10).join(summary_lines)}
+
+━━━━━━━━━━━━━━━
+是否有其他特殊需求？
+
+常見需求：
+• 嬰兒床
+• 嬰兒澡盆
+• 消毒鍋
+• 無障礙房
+
+（沒有請輸入「無」或「沒有」，有需求請直接說明）"""
+        
+        # 詢問下一個房型的床型
+        next_order = orders[next_idx]
+        next_room = next_order['room']
+        next_beds = next_room.get('beds', [])
+        bed_options = "\n".join([f"{i+1}. {bed}" for i, bed in enumerate(next_beds)])
+        
+        return f"""✅ {current_room['name']}：{selected_bed}
+
+🛏️ 請選擇【{next_room['name']}】的床型：
+{bed_options}
+
+（請輸入數字選擇）"""
+    
+    def _handle_requests_collection(self, user_id: str, session: Dict, message: str) -> str:
+        """收集客人特殊需求"""
+        message_clean = message.strip()
+        
+        # 判斷是否沒有需求
+        no_request_keywords = ['無', '沒有', '沒', '不用', '不需要', '無需', 'no', '否']
+        has_no_request = any(kw in message_clean.lower() for kw in no_request_keywords)
+        
+        if has_no_request:
+            # 沒有特殊需求
+            session['special_requests'] = None
+            session['state'] = self.STATE_COLLECT_INFO
+            return """好的，沒有特殊需求！
+
+請提供以下資訊以完成預訂：
+1️⃣ 您的姓名
+2️⃣ 聯絡電話
+3️⃣ 預計抵達時間
+
+（您可以一次提供，例如：王小明、0912345678、晚上7點）"""
+        
+        # 有特殊需求，儲存需求內容
+        session['special_requests'] = message_clean
+        session['state'] = self.STATE_COLLECT_INFO
+        
+        return f"""✅ 已記錄您的特殊需求：{message_clean}
+
+請提供以下資訊以完成預訂：
+1️⃣ 您的姓名
+2️⃣ 聯絡電話
+3️⃣ 預計抵達時間
+
+（您可以一次提供，例如：王小明、0912345678、晚上7點）"""
+    
     def _handle_info_collection(self, user_id: str, session: Dict, message: str) -> str:
         """收集客人資訊"""
         import re
         
-        # 嘗試解析姓名、電話、時間
-        # 電話格式：09xxxxxxxx
-        phone_match = re.search(r'(09\d{8})', message.replace('-', '').replace(' ', ''))
-        if phone_match:
-            session['phone'] = phone_match.group(1)
+        # 清理訊息
+        clean_message = message.replace('-', '').replace(' ', '')
         
-        # 時間格式：各種表達方式
-        time_patterns = [
-            r'(下午\d+點)', r'(晚上\d+點)', r'(傍晚\d+點)', r'(上午\d+點)',
-            r'(\d{1,2}[點:：]\d{0,2})', r'(\d{1,2}點)',
-            r'(大約\S+)', r'(約\S+點)',
-        ]
-        for pattern in time_patterns:
-            time_match = re.search(pattern, message)
-            if time_match:
-                session['arrival_time'] = time_match.group(1)
-                break
+        # 1. 嘗試解析電話
+        # 先找所有數字開頭的疑似電話（至少 8 位數）
+        all_digits_match = re.search(r'(0\d{7,14})', clean_message)
+        if all_digits_match and not session.get('phone'):
+            potential_phone = all_digits_match.group(1)
+            
+            # 檢查是否為標準台灣手機格式（09 開頭 10 位）
+            if re.match(r'^09\d{8}$', potential_phone):
+                # 正確格式
+                session['phone'] = potential_phone
+            elif potential_phone.startswith('09') and len(potential_phone) != 10:
+                # 09 開頭但位數不對，需確認
+                session['pending_phone'] = potential_phone
+            elif len(potential_phone) >= 8:
+                # 其他格式（市話或可能打錯），暫存等待確認
+                session['pending_phone'] = potential_phone
         
-        # 姓名：排除電話和時間後的中文/英文
-        remaining = message
-        if phone_match:
-            remaining = remaining.replace(phone_match.group(1), '')
-        if session.get('arrival_time'):
-            remaining = remaining.replace(session['arrival_time'], '')
+        # 2. 嘗試解析抵達時間（更寬鬆的格式）
+        if not session.get('arrival_time'):
+            time_patterns = [
+                r'(下午\d+點?半?)', r'(晚上\d+點?半?)', r'(傍晚\d+點?半?)', 
+                r'(上午\d+點?半?)', r'(中午\d*點?半?)',
+                r'(\d{1,2}[點:：時]\d{0,2})',  # 3點、15:00
+                r'(\d{1,2}點半?)',  # 5點、5點半
+                r'(\d+分鐘後[到來]?)',  # 10分鐘後到、5分鐘後
+                r'(馬上[到來]?)', r'(等等[到來]?)', r'(現在)', r'(待會[兒]?[到來]?)',
+            ]
+            for pattern in time_patterns:
+                time_match = re.search(pattern, message)
+                if time_match:
+                    session['arrival_time'] = time_match.group(1)
+                    break
         
-        # 嘗試提取姓名
-        name_match = re.search(r'([一-龥A-Za-z]{2,10})', remaining.replace(',', '').replace('，', '').strip())
-        if name_match and not session.get('guest_name'):
-            potential_name = name_match.group(1)
-            # 排除常見非姓名詞
-            exclude_words = ['晚上', '下午', '傍晚', '上午', '點', '間', '房']
-            if not any(word in potential_name for word in exclude_words):
-                session['guest_name'] = potential_name
+        # 3. 嘗試解析姓名
+        if not session.get('guest_name'):
+            remaining = message
+            if all_digits_match:
+                remaining = remaining.replace(all_digits_match.group(0), '')
+            if session.get('arrival_time'):
+                remaining = remaining.replace(session['arrival_time'], '')
+            
+            # 清理標點後提取姓名
+            remaining = re.sub(r'[,，、。！？\s]', '', remaining)
+            name_match = re.search(r'([一-龥A-Za-z]{2,10})', remaining)
+            if name_match:
+                potential_name = name_match.group(1)
+                # 排除非姓名詞
+                exclude_words = ['晚上', '下午', '傍晚', '上午', '中午', '點', '間', '房', '好了', '可以', '沒問題']
+                if not any(word in potential_name for word in exclude_words):
+                    session['guest_name'] = potential_name
         
-        # 檢查是否收集完整
+        # 4. 檢查是否有待確認的電話
+        if session.get('pending_phone') and not session.get('phone'):
+            pending = session['pending_phone']
+            # 檢查用戶是否正在回覆確認
+            msg_lower = message.strip().lower()
+            if msg_lower in ['是', '對', '正確', 'yes', 'y', '確認', '沒錯']:
+                # 用戶確認電話正確
+                session['phone'] = pending
+                del session['pending_phone']
+            elif msg_lower in ['否', '不對', '不是', 'no', 'n', '錯了', '打錯']:
+                # 用戶說電話錯了
+                del session['pending_phone']
+                return "請重新提供您的聯絡電話（手機號碼）"
+            else:
+                # 還沒確認過，詢問用戶
+                if len(pending) != 10:
+                    return f"您輸入的電話 {pending} 似乎有 {len(pending)} 位數，台灣手機通常是 10 位數（09 開頭）。\n\n請問這個號碼正確嗎？\n• 正確請回覆「是」\n• 錯誤請回覆「否」並重新提供"
+                else:
+                    return f"請確認您的電話號碼：{pending}\n• 正確請回覆「是」\n• 錯誤請回覆「否」"
+        
+        # 5. 檢查缺少的必填資訊並給專業提示
         missing = []
+        if not session.get('phone'):
+            missing.append('電話')
+        if not session.get('arrival_time'):
+            missing.append('抵達時間')
         if not session.get('guest_name'):
             missing.append('姓名')
-        if not session.get('phone'):
-            missing.append('聯絡電話')
-        if not session.get('arrival_time'):
-            missing.append('預計抵達時間')
         
         if missing:
-            return f"請再提供：{'、'.join(missing)}"
+            if 'arrival_time' not in [k for k in session.keys() if session.get(k)] and '抵達時間' in missing:
+                return "請提供您預計幾點抵達？（例如：下午3點、晚上7點）"
+            elif 'phone' not in [k for k in session.keys() if session.get(k)] and '電話' in missing:
+                return "請提供您的聯絡電話（手機號碼）"
+            elif 'guest_name' not in [k for k in session.keys() if session.get(k)] and '姓名' in missing:
+                return "請問您的大名是？"
+            return f"請提供：{'、'.join(missing)}"
         
-        # 檢查抵達時間是否有效（不接受晚上10點後或隔日）
+        # 5. 驗證抵達時間是否有效
         arrival_time = session.get('arrival_time', '')
         if self._is_invalid_arrival_time(arrival_time):
             self.clear_session(user_id)
@@ -855,6 +1133,13 @@ class SameDayBookingHandler:
 
 如需隔日入住，請透過官網預訂：
 🌐 https://ktwhotel.com/2cTrT"""
+        
+        # 6. 檢查時間是否模糊，需要再次確認
+        if self._is_vague_arrival_time(arrival_time):
+            # 標記為需要確認時間
+            if not session.get('time_confirmed'):
+                session['time_confirmed'] = False
+                return f"您說{arrival_time}，請問大約是幾點呢？（例如：3點、下午5點）"
         
         # 資訊完整，進入確認階段
         session['state'] = self.STATE_CONFIRM
@@ -1004,18 +1289,33 @@ class SameDayBookingHandler:
         created_orders = []
         room_lines = []
         
-        for order in orders:
+        # 生成大訂單 ID（所有房型共用）- 格式：WI+月日時分
+        from datetime import datetime
+        now = datetime.now()
+        order_id = f"WI{now.strftime('%m%d%H%M')}"
+        
+        for idx, order in enumerate(orders, start=1):
             room = order['room']
             count = order['count']
             
+            # 生成小項目 ID（每個房型獨立）
+            item_id = f"{order_id}-{idx}"
+            
+            # 取得床型：優先使用用戶選擇的，沒有則用預設（beds 陣列第一個）
+            bed_type = order.get('bed_type') or room.get('beds', [None])[0]
+            
             booking_data = {
+                'order_id': order_id,           # 大訂單 ID（多房型共用）
+                'item_id': item_id,             # 小項目 ID（每房型獨立）
                 'room_type_code': room.get('code'),
                 'room_type_name': room.get('name'),
                 'room_count': count,
+                'bed_type': bed_type,           # 用戶選擇或預設床型
                 'nights': 1,
                 'guest_name': session['guest_name'],
                 'phone': session['phone'],
                 'arrival_time': session['arrival_time'],
+                'special_requests': session.get('special_requests'),  # 客人特殊需求
                 'line_user_id': user_id,
                 'line_display_name': session.get('line_display_name')
             }
@@ -1072,8 +1372,8 @@ class SameDayBookingHandler:
                                room: Dict, check_in: str, check_out: str):
         """將當日預訂寫入 guest_orders.json"""
         try:
-            # 檔案路徑
-            orders_file = os.path.join(os.path.dirname(__file__), 'chat_logs', 'guest_orders.json')
+            # 檔案路徑（從 handlers/ 跳兩層到 LINEBOT/，再到 data/chat_logs/）
+            orders_file = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'chat_logs', 'guest_orders.json')
             
             # 讀取現有資料
             orders = {}

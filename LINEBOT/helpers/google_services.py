@@ -20,7 +20,8 @@ class GoogleServices:
     def authenticate(self):
         """Handles OAuth2 authentication and token management."""
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.join(base_dir, '..', 'data')
+        # 從 helpers/ 跳兩層到 LINEBOT/，再到 data/
+        data_dir = os.path.join(base_dir, '..', '..', 'data')
         token_path = os.path.join(data_dir, 'token.json')
         creds_path = os.path.join(data_dir, 'credentials.json')
 

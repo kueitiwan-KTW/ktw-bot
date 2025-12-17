@@ -11,6 +11,21 @@
 
 ---
 
+## [1.2.0] - 2025-12-17
+
+### 整合更新: A.I. 當日預訂與自動驗證
+- **LINE Bot (v1.2.0)**: 當日預訂邏輯重構，支援多房型 AI 解析與主動確認。
+- **Admin Web (v1.1.2)**: 新增已 KEY 訂單「自動匹配驗證」功能，支援 KEY 錯狀態顯示與重新匹配。
+- **Backend API (v1.0.1)**: 支援 PMS 電話號碼自動匹配邏輯。
+- **PMS API**: 新增 mismatch 狀態記錄端點。
+
+### 詳細變更
+- [LINE Bot CHANGELOG](./LINEBOT/CHANGELOG.md#120---2025-12-17)
+- [Admin Web CHANGELOG](./KTW-admin-web/CHANGELOG.md#v112-2025-12-17)
+- [Backend API CHANGELOG](./KTW-backend/CHANGELOG.md#101---2025-12-17)
+
+---
+
 ## [1.1.6] - 2025-12-17
 
 ### LINE Bot

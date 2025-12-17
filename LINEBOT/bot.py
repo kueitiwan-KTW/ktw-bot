@@ -9,12 +9,11 @@ load_dotenv()
 import google.generativeai as genai
 from PIL import Image
 import io
-from google_services import GoogleServices
-from gmail_helper import GmailHelper
+
+# 從新的模組結構匯入
+from helpers import GoogleServices, GmailHelper, WeatherHelper, PMSClient
+from handlers import HandlerRouter, OrderQueryHandler, AIConversationHandler, SameDayBookingHandler
 from chat_logger import ChatLogger
-from weather_helper import WeatherHelper
-from pms_client import PMSClient
-from same_day_booking import SameDayBookingHandler
 
 class HotelBot:
     def __init__(self, knowledge_base_path, persona_path):
@@ -37,6 +36,13 @@ class HotelBot:
         # Initialize Logger
         self.logger = ChatLogger()
         
+        # Initialize Order Query Handler（訂單查詢處理器）
+        self.order_query_handler = OrderQueryHandler(
+            pms_client=self.pms_client,
+            gmail_helper=self.gmail_helper,
+            logger=self.logger
+        )
+        
         # Initialize User Sessions
         self.user_sessions = {}
         self.user_context = {}  # Store temporary context like pending order IDs
@@ -55,9 +61,15 @@ class HotelBot:
             self.room_types = self._load_json(room_types_path)
             
             
-            # Define Tools for Gemini
-            # Define Tools for Gemini
-            self.tools = [self.check_order_status, self.get_weather_forecast, self.get_weekly_forecast, self.update_guest_info]
+            # Define Tools for Gemini (including same-day booking)
+            self.tools = [
+                self.check_order_status, 
+                self.get_weather_forecast, 
+                self.get_weekly_forecast, 
+                self.update_guest_info,
+                self.check_today_availability,
+                self.create_same_day_booking
+            ]
             
             # Construct System Instruction
             kb_str = json.dumps(self.knowledge_base, ensure_ascii=False, indent=2)
@@ -70,13 +82,36 @@ Your Persona:
 Your Knowledge Base (FAQ):
 {kb_str}
 
+**PROACTIVE CONFIRMATION PRINCIPLE (主動確認原則) ⭐:**
+凡是遇到**模糊、不確定、可能有多種解釋**的情況，你必須**主動向客人確認**，而非自行判斷或假設。
+
+範例情況：
+1. **數字可能是電話或訂單編號**：
+   - 收到「0987222333」時，如果當時在收集電話，應詢問：「請問這是您的聯絡電話嗎？」
+   - 不要自動判斷為訂單編號去查詢
+   
+2. **時間可能是上午或下午**：
+   - 收到「6點」時，應詢問：「請問是下午6點還是早上6點呢？」
+   
+3. **需求可能是問題或請求**：
+   - 收到「停車場」時，可詢問：「請問您是想詢問停車場資訊，還是需要預留停車位呢？」
+
+4. **姓名可能不完整**：
+   - 收到「王」時，可詢問：「請問您的全名是？」
+
+**核心精神**：寧可多問一句確認，也不要自作主張導致錯誤。這樣能提供更準確的服務。
+
 **CRITICAL INSTRUCTION FOR ORDER VERIFICATION:**
-1. **TRIGGER RULE**: If the user's message contains **ANY** sequence of digits (5 digits or more) or text resembling an **Order ID**, you **MUST** immediately assume they want to **check the status** of that order.
-   - Even if they say "I have a booking" (statement), treat it as "Check this booking" (command).
-   - DO NOT reply with pleasantries like "Have a nice trip" without checking.
+1. **TRIGGER RULE** (with context awareness):
+   - If the user's message contains a sequence of digits (5+ digits) that **looks like an Order ID**, you should check it.
+   - **HOWEVER**: If you are currently in a **same-day booking flow** (collecting phone, name, arrival time), 
+     a 10-digit number starting with 09 is likely a **phone number**, NOT an order ID.
+   - **Context matters**: 
+     * If user just asked about booking → digits are likely Order ID
+     * If you just asked for phone number → digits are likely phone number
+     * If unsure → ASK the user: "請問這是您的電話還是訂單編號？"
    - **ANTI-HALLUCINATION WARNING**: You DO NOT have an internal database of orders. You CANNOT know who "1673266483" belongs to without using the tool.
    - If you generate a response containing a Name or Date WITHOUT calling `check_order_status`, you are FAILING.
-   - **ALWAYS** call the tool.
    
 2. Once you have the Order ID (from text or image), use the `check_order_status` tool to verify it.
 3. **Tool Output Analysis**:
@@ -299,6 +334,49 @@ Your Knowledge Base (FAQ):
         **CRITICAL**: These notices are MANDATORY and must be shown every time after order confirmation is complete. Do not skip them.
     - **If Order NOT Found**:
      - Apologize and ask them to double-check the ID.
+
+**SAME-DAY BOOKING INSTRUCTIONS (當日預訂):**
+當客人表達想要「今天入住」、「現在訂房」、「當日預訂」等意圖時，使用當日預訂工具：
+
+1. **觸發條件**:
+   - 客人說「今天入住」、「馬上入住」、「現在訂房」、「等等到」
+   - 客人問「今天有房嗎」、「現在還有空房嗎」
+   - 注意：有訂單編號的是「查詢訂單」，沒有編號的是「新訂房」
+
+2. **流程**:
+   Step 1: 使用 `check_today_availability()` 查詢房況
+   Step 2: 向客人展示可訂房型和價格
+   Step 3: 收集以下資訊（可以多輪對話）：
+           - 房型和數量（如「兩間雙人一間四人」）
+           - 姓名
+           - 電話（必須是 09 開頭的 10 位數）
+           - 預計抵達時間
+           - 床型偏好（可選）
+           - 特殊需求（可選，如嬰兒床、停車位）
+   Step 4: 確認所有資訊後，使用 `create_same_day_booking()` 建立預訂
+
+3. **重要規則**:
+   - 房型：標準雙人房(SD) $2,280、標準三人房(ST) $2,880、標準四人房(SQ) $3,680
+   - 含早餐
+   - 僅接受晚上 10 點前抵達
+   - 電話必須驗證格式（09 開頭 10 位數）
+   - 多房型：可以一次訂多種房型，例如「2間雙人1間四人」
+
+4. **對話範例**:
+   客人：「今天想住」
+   → 呼叫 check_today_availability()
+   → 顯示房況，詢問想訂什麼房型
+   
+   客人：「兩間雙人房」
+   → 詢問姓名、電話、抵達時間
+   
+   客人：「王小明 0912345678 下午5點」
+   → 呼叫 create_same_day_booking(room_type='雙人房', room_count=2, guest_name='王小明', phone='0912345678', arrival_time='下午5點')
+
+5. **智能理解**:
+   - 「兩間」、「2間」都理解為 2
+   - 「6點」在下午時應理解為 18:00
+   - 「馬上到」、「10分鐘後」都是有效抵達時間
 
 **General Instructions:**
 1. **STRICTLY** answer the user's question based **ONLY** on the provided Knowledge Base.
@@ -928,6 +1006,233 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
                 "message": "Failed to save information. Please try again."
             }
 
+    # ============================================
+    # 當日預訂 Functions (Same-Day Booking)
+    # ============================================
+
+    def check_today_availability(self):
+        """
+        查詢今日可預訂的房型和數量。
+        當客人表達想要預訂當日入住時，使用此工具查詢房況。
+        
+        Returns:
+            Dict containing available room types and their counts
+        """
+        print(f"🔧 Tool Called: check_today_availability()")
+        
+        result = self.pms_client.get_today_availability()
+        
+        if not result or not result.get('success'):
+            return {
+                "status": "error",
+                "message": "目前無法查詢房況，請稍後再試"
+            }
+        
+        available_rooms = result.get('data', {}).get('available_room_types', [])
+        
+        # 只顯示標準房型
+        standard_rooms = []
+        room_mapping = {
+            'SD': {'name': '標準雙人房', 'price': 2280, 'capacity': 2, 'beds': ['一大床', '兩小床']},
+            'ST': {'name': '標準三人房', 'price': 2880, 'capacity': 3, 'beds': ['一大一小', '三小床']},
+            'SQ': {'name': '標準四人房', 'price': 3680, 'capacity': 4, 'beds': ['兩大床', '四小床']}
+        }
+        
+        for room in available_rooms:
+            code = room.get('room_type_code')
+            if code in room_mapping:
+                info = room_mapping[code]
+                standard_rooms.append({
+                    'code': code,
+                    'name': info['name'],
+                    'price': info['price'],
+                    'available': room.get('available_count', 0),
+                    'bed_options': info['beds']
+                })
+        
+        return {
+            "status": "success",
+            "date": result.get('data', {}).get('date'),
+            "rooms": standard_rooms,
+            "instructions": """
+請用以下格式向客人展示房況，並詢問想預訂的房型：
+
+📋 今日可預訂房型：
+• 標準雙人房 - NT$2,280/晚（含早餐）
+• 標準三人房 - NT$2,880/晚（含早餐）
+• 標準四人房 - NT$3,680/晚（含早餐）
+
+客人可以說：
+- 直接說房型：「雙人房」、「四人房」
+- 說數量：「兩間雙人」、「1間四人1間雙人」
+"""
+        }
+
+    def create_same_day_booking(
+        self,
+        rooms: str,
+        guest_name: str,
+        phone: str,
+        arrival_time: str,
+        bed_type: str = None,
+        special_requests: str = None
+    ):
+        """
+        建立當日入住預訂。收集完所有必要資訊後使用此工具。
+        
+        Args:
+            rooms: 房型和數量，支援多種格式：
+                   - 單一房型：「雙人房」、「2間雙人房」
+                   - 多房型：「標準雙人房 x 2, 標準四人房 x 1」或「2間雙人1間四人」
+            guest_name: 客人姓名
+            phone: 聯絡電話（台灣手機格式 09xxxxxxxx）
+            arrival_time: 預計抵達時間
+            bed_type: 床型偏好（可選）
+            special_requests: 特殊需求（可選，如嬰兒床、停車位）
+            
+        Returns:
+            Dict with booking result
+        """
+        import re
+        from datetime import datetime
+        
+        print(f"🔧 Tool Called: create_same_day_booking(rooms={rooms}, name={guest_name}, phone={phone}, time={arrival_time})")
+        
+        # 驗證電話格式
+        phone_clean = re.sub(r'[-\s]', '', phone)
+        if not re.match(r'^09\d{8}$', phone_clean):
+            return {
+                "status": "error",
+                "message": f"電話格式不正確：{phone}。台灣手機應為 09 開頭的 10 位數字。請請客人確認電話。"
+            }
+        
+        # 房型代碼轉換
+        room_codes = {
+            '雙人': 'SD', '雙人房': 'SD', 'SD': 'SD', '標準雙人房': 'SD',
+            '三人': 'ST', '三人房': 'ST', 'ST': 'ST', '標準三人房': 'ST',
+            '四人': 'SQ', '四人房': 'SQ', 'SQ': 'SQ', '標準四人房': 'SQ'
+        }
+        room_names = {'SD': '標準雙人房', 'ST': '標準三人房', 'SQ': '標準四人房'}
+        prices = {'SD': 2280, 'ST': 2880, 'SQ': 3680}
+        
+        # 解析房型字串（支援多種格式）
+        parsed_rooms = []
+        
+        # 嘗試解析「標準雙人房 x 2, 標準四人房 x 1」格式
+        pattern1 = r'(標準?[雙三四]人房?)\s*[xX×]\s*(\d+)'
+        matches1 = re.findall(pattern1, rooms)
+        
+        if matches1:
+            for room_type, count in matches1:
+                room_code = room_codes.get(room_type)
+                if room_code:
+                    parsed_rooms.append({'code': room_code, 'name': room_names[room_code], 'count': int(count)})
+        else:
+            # 嘗試解析「2間雙人1間四人」格式
+            pattern2 = r'(\d+)\s*間?\s*(雙人房?|三人房?|四人房?)'
+            matches2 = re.findall(pattern2, rooms)
+            
+            if matches2:
+                for count, room_type in matches2:
+                    room_code = room_codes.get(room_type)
+                    if room_code:
+                        parsed_rooms.append({'code': room_code, 'name': room_names[room_code], 'count': int(count)})
+            else:
+                # 單一房型格式
+                room_code = room_codes.get(rooms.strip())
+                if room_code:
+                    parsed_rooms.append({'code': room_code, 'name': room_names[room_code], 'count': 1})
+        
+        print(f"   解析結果: {parsed_rooms}")
+        
+        if not parsed_rooms:
+            return {
+                "status": "error",
+                "message": f"無法識別房型：{rooms}。請指定：標準雙人房、標準三人房或標準四人房"
+            }
+        
+        # 建立訂單
+        now = datetime.now()
+        order_id = f"WI{now.strftime('%m%d%H%M')}"
+        
+        total_price = 0
+        room_summary = []
+        all_success = True
+        
+        # 解析 bed_type 字串（格式如：「標準三人房: 三小床, 標準四人房: 兩大床」）
+        bed_type_map = {}
+        if bed_type:
+            # 嘗試解析 "房型: 床型, 房型: 床型" 格式
+            parts = re.split(r',\s*', bed_type)
+            for part in parts:
+                if ':' in part or '：' in part:
+                    # 分割房型和床型
+                    room_bed = re.split(r'[:：]\s*', part.strip())
+                    if len(room_bed) >= 2:
+                        room_name_key = room_bed[0].strip()
+                        bed_value = room_bed[1].strip()
+                        # 轉換為房型代碼
+                        room_code_key = room_codes.get(room_name_key)
+                        if room_code_key:
+                            bed_type_map[room_code_key] = bed_value
+            print(f"   床型解析: {bed_type_map}")
+        
+        for i, room in enumerate(parsed_rooms):
+            item_id = f"{order_id}-{i+1}"
+            
+            # 為每個房型找到對應的床型
+            room_bed_type = bed_type_map.get(room['code'], bed_type if not bed_type_map else None)
+            
+            booking_data = {
+                'order_id': order_id,
+                'item_id': item_id,
+                'room_type_code': room['code'],
+                'room_type_name': room['name'],
+                'room_count': room['count'],
+                'bed_type': room_bed_type,
+                'special_requests': special_requests,
+                'nights': 1,
+                'guest_name': guest_name,
+                'phone': phone_clean,
+                'arrival_time': arrival_time,
+                'line_user_id': self.current_user_id,
+                'line_display_name': None
+            }
+
+            
+            result = self.pms_client.create_same_day_booking(booking_data)
+            
+            if result and result.get('success'):
+                total_price += prices.get(room['code'], 0) * room['count']
+                room_summary.append(f"{room['name']} x {room['count']} 間")
+            else:
+                all_success = False
+        
+        if all_success and room_summary:
+            return {
+                "status": "success",
+                "order_id": order_id,
+                "message": f"""
+🎉 預訂成功！
+
+📋 訂單編號：{order_id}
+🏨 房型：
+{chr(10).join('   • ' + r for r in room_summary)}
+💰 總計：NT${total_price:,}（含早餐）
+📅 入住日期：{now.strftime('%Y-%m-%d')}（今日）
+👤 姓名：{guest_name}
+📞 電話：{phone_clean}
+🕐 抵達時間：{arrival_time}
+{f"📝 特殊需求：{special_requests}" if special_requests else ""}
+
+⚠️ 提醒：當日預訂免收訂金，請務必準時抵達！
+"""
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "預訂失敗，請稍後再試或聯繫櫃檯。"
+            }
 
     def get_weather_forecast(self, date_str: str):
         """
@@ -1105,6 +1410,38 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
         self.logger.log(user_id, "System", "=== 對話已重新開始 ===")
         print(f"🔄 User {user_id} conversation resetted")
 
+    def _is_booking_intent_without_order(self, message: str, user_id: str) -> bool:
+        """
+        判斷是否為訂房意圖但沒有訂單編號
+        
+        Args:
+            message: 用戶訊息
+            user_id: 用戶 ID
+            
+        Returns:
+            True 如果是訂房意圖且沒有訂單編號
+        """
+        # 檢查是否包含訂單編號 (5位數以上)
+        if re.search(r'\b\d{5,}\b', message):
+            return False  # 有訂單編號，走一般查詢流程
+        
+        # 排除：查詢訂單相關
+        exclude_keywords = ['我有訂', '已經訂', '查訂單', '我的訂單', '確認訂單']
+        if any(kw in message for kw in exclude_keywords):
+            return False
+        
+        # 檢查是否有訂房關鍵字
+        booking_keywords = [
+            '訂房', '預訂', '今天住', '今日住', '有房', '還有房',
+            '空房', '想住', '要住', '可以住', '今天訂', '今日訂',
+            '今天', '今日'  # 單獨說「今天」也視為訂房意圖
+        ]
+        
+        return any(kw in message for kw in booking_keywords)
+
+    def _has_order_number(self, message: str) -> bool:
+        """檢查訊息中是否包含訂單編號"""
+        return bool(re.search(r'\b\d{5,}\b', message))
 
     def generate_response(self, user_question, user_id="default_user", display_name=None):
         # 設定當前用戶 ID，供工具函數使用
@@ -1118,15 +1455,21 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
         self.logger.log(user_id, "User", user_question)
 
         # ============================================
-        # 當日預訂處理器攔截（僅處理進行中的對話）
+        # 路由邏輯 - 決定使用哪個處理器
         # ============================================
-        # 只檢查是否正在進行預訂流程，不檢查新訂房意圖（交給 AI 判斷）
-        if self.same_day_handler.is_in_booking_flow(user_id):
-            same_day_response = self.same_day_handler.handle_message(user_id, user_question, display_name)
-            if same_day_response:
-                # 記錄 Bot 回覆
-                self.logger.log(user_id, "Bot", same_day_response)
-                return same_day_response
+        
+        # 優先檢查 1: 訂單查詢處理器（進行中的流程）
+        if self.order_query_handler.is_active(user_id):
+            order_response = self.order_query_handler.handle_message(user_id, user_question, display_name)
+            if order_response:
+                self.logger.log(user_id, "Bot", order_response)
+                return order_response
+        
+        # 注意：訂單編號判斷現在由 AI 統一處理（根據上下文判斷數字是電話還是訂單編號）
+        # 當日預訂也由 AI 統一處理（透過 check_today_availability 和 create_same_day_booking Functions）
+        
+        # ============================================
+        # 一般 AI 對話
         # ============================================
 
         # Check for pending context (e.g. Order ID from previous image)

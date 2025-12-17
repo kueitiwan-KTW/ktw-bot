@@ -12,6 +12,7 @@ Backend API 是 KTW Hotel 系統的中間層服務,負責處理 Admin Dashboard 
 - ✅ PMS API 代理與快取
 - ✅ WebSocket 即時通訊
 - ✅ LINE Bot 訊息推送
+- ✅ 訂單自動匹配驗證 (PMS 整合)
 - ✅ 服務狀態監控
 - ✅ CORS 處理
 
@@ -49,7 +50,7 @@ pm2 start ecosystem.config.js --only DT-Backend
 
 ## 📝 版本資訊
 
-- **當前版本**: v1.0.0
+- **當前版本**: v1.0.1
 - **最後更新**: 2025-12-17
 - **維護者**: KTW Hotel IT Team
 

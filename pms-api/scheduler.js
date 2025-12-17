@@ -81,9 +81,9 @@ function cleanupExpiredBookings() {
         }
         logs.push(logEntry);
 
-        // 只保留最近 30 天的日誌
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        logs = logs.filter(l => l.timestamp > thirtyDaysAgo);
+        // 只保留最近 90 天的日誌
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        logs = logs.filter(l => l.timestamp > ninetyDaysAgo);
 
         fs.writeFileSync(LOG_FILE, JSON.stringify(logs, null, 2), 'utf8');
 

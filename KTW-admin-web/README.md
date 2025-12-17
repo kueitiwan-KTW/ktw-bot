@@ -119,6 +119,11 @@ pm2 start ecosystem.config.js --only DT-Admin-Web
 - **顯示**: 用戶名稱、頭像、訊息內容、VIP 標記
 - **通知**: 桌面通知 (需授權)
 
+### 6. 訂單自動驗證 (New)
+- **已 KEY 匹配**: 自動比對 PMS 今日入住名單 (電話後 9 碼)
+- **狀態顯示**: 支援 KEY 錯 (Mismatch)、已 KEY (Checked In)、待入住 (Pending)
+- **異常處理**: 提供重新匹配按鈕，方便資料修正後再次驗證
+
 ---
 
 ## 🎨 UI 特色
@@ -193,8 +198,8 @@ pm2 restart DT-Admin-Web
 
 ## 📝 版本資訊
 
-- **當前版本**: v1.1.1
-- **最後更新**: 2025-12-16
+- **當前版本**: v1.1.2
+- **最後更新**: 2025-12-17
 - **維護者**: KTW Hotel IT Team
 
 詳細變更記錄請參閱 [CHANGELOG.md](./CHANGELOG.md)
