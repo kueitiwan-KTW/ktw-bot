@@ -173,6 +173,67 @@ async function fetchTomorrowCheckin() {
 const sameDayBookings = ref([])
 const sameDayLoading = ref(false)
 const sameDayError = ref(null)
+const expandedOrders = ref([])  // 展開的大訂單 ID
+
+// 按 order_id 分組訂單（用於收折顯示）
+const groupedBookings = computed(() => {
+  const groups = {}
+  sameDayBookings.value.forEach(b => {
+    const orderId = b.order_id
+    if (!groups[orderId]) {
+      groups[orderId] = {
+        order_id: orderId,
+        guest_name: b.guest_name,
+        phone: b.phone,
+        arrival_time: b.arrival_time,
+        line_display_name: b.line_display_name,
+        created_at: b.created_at,
+        items: []
+      }
+    }
+    groups[orderId].items.push(b)
+  })
+  
+  // 計算每個大訂單的整體狀態
+  const groupList = Object.values(groups).map(group => {
+    const allCancelled = group.items.every(i => i.status === 'cancelled')
+    const allCheckedIn = group.items.every(i => i.status === 'checked_in')
+    const hasMismatch = group.items.some(i => i.status === 'mismatch')
+    const hasPending = group.items.some(i => i.status === 'pending' || i.status === 'interrupted')
+    
+    // 整體狀態優先順序：mismatch > pending > checked_in > cancelled
+    let groupStatus = 'pending'
+    if (allCancelled) groupStatus = 'cancelled'
+    else if (allCheckedIn) groupStatus = 'checked_in'
+    else if (hasMismatch) groupStatus = 'mismatch'
+    else if (hasPending) groupStatus = 'pending'
+    
+    return { ...group, groupStatus }
+  })
+  
+  // 排序：KEY 錯在最上，接著待入住，最後已取消
+  groupList.sort((a, b) => {
+    const statusOrder = { 'mismatch': 0, 'pending': 1, 'checked_in': 2, 'cancelled': 3 }
+    return (statusOrder[a.groupStatus] || 1) - (statusOrder[b.groupStatus] || 1)
+  })
+  
+  // 過濾：已 KEY 的訂單不顯示
+  return groupList.filter(g => g.groupStatus !== 'checked_in')
+})
+
+// 切換大訂單展開狀態
+function toggleOrderExpand(orderId) {
+  const idx = expandedOrders.value.indexOf(orderId)
+  if (idx > -1) {
+    expandedOrders.value = expandedOrders.value.filter(id => id !== orderId)
+  } else {
+    expandedOrders.value = [...expandedOrders.value, orderId]
+  }
+}
+
+function isOrderExpanded(orderId) {
+  return expandedOrders.value.includes(orderId)
+}
 
 // 取得當日暫存訂單
 async function fetchSameDayBookings() {
@@ -199,17 +260,21 @@ async function fetchSameDayBookings() {
   }
 }
 
-// 標記暫存訂單為已 KEY
+// 標記暫存訂單為已 KEY（含 PMS 匹配驗證）
 async function markAsKeyed(orderId) {
   try {
     const res = await fetch(`${API_BASE}/api/pms/same-day-bookings/${orderId}/checkin`, {
       method: 'PATCH',
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(10000)  // 加長超時，因為需要查詢 PMS
     })
     if (res.ok) {
       const result = await res.json()
       if (result.success) {
-        // 刷新列表
+        // 匹配成功，刷新列表
+        await fetchSameDayBookings()
+      } else if (result.mismatch) {
+        // 匹配失敗，刷新列表顯示 KEY 錯狀態
+        console.log('⚠️ PMS 匹配失敗:', result.error)
         await fetchSameDayBookings()
       }
     }
@@ -223,7 +288,7 @@ async function cancelBooking(orderId) {
   if (!confirm('確定要取消此訂單嗎？')) return
   
   try {
-    const res = await fetch(`${API_BASE}/api/bookings/same-day/${orderId}/cancel`, {
+    const res = await fetch(`${API_BASE}/api/pms/same-day-bookings/${orderId}/cancel`, {
       method: 'PATCH',
       signal: AbortSignal.timeout(5000)
     })
@@ -243,6 +308,40 @@ async function cancelBooking(orderId) {
     console.error('取消訂單失敗:', error)
     alert('❌ 取消失敗：' + error.message)
   }
+}
+
+// 批次標記所有房型為已 KEY
+async function markAllAsKeyed(group) {
+  // 包含 pending、interrupted、mismatch 狀態的項目都要處理
+  const pendingItems = group.items.filter(i => 
+    i.status === 'pending' || i.status === 'interrupted' || i.status === 'mismatch'
+  )
+  if (pendingItems.length === 0) return
+  
+  for (const item of pendingItems) {
+    await markAsKeyed(item.item_id || item.order_id)
+  }
+}
+
+// 批次取消所有房型
+async function cancelAllBookings(group) {
+  const pendingItems = group.items.filter(i => i.status === 'pending' || i.status === 'interrupted')
+  if (pendingItems.length === 0) return
+  
+  if (!confirm(`確定要取消此訂單的所有 ${pendingItems.length} 間房嗎？`)) return
+  
+  for (const item of pendingItems) {
+    try {
+      const res = await fetch(`${API_BASE}/api/pms/same-day-bookings/${item.item_id || item.order_id}/cancel`, {
+        method: 'PATCH',
+        signal: AbortSignal.timeout(5000)
+      })
+    } catch (error) {
+      console.error('批次取消失敗:', error)
+    }
+  }
+  alert('✅ 已取消所有房型')
+  await fetchSameDayBookings()
 }
 
 // 格式化日期時間（顯示時間部分）
@@ -755,52 +854,64 @@ const statusIcons = {
             <div v-show="!widgets[5].collapsed" class="panel-body">
               <div v-if="sameDayLoading" class="loading-text">載入中...</div>
               <div v-else-if="sameDayError" class="error-text">{{ sameDayError }}</div>
-              <div v-else-if="sameDayBookings.length === 0" class="empty-text">📋 目前無 LINE 當日預訂</div>
+              <div v-else-if="groupedBookings.length === 0" class="empty-text">📋 目前無 LINE 當日預訂</div>
               <div v-else class="same-day-table-wrapper">
-                <table class="same-day-table">
-                  <thead>
-                    <tr>
-                      <th>訂單時間</th>
-                      <th>房型</th>
-                      <th>姓名</th>
-                      <th>LINE 姓名</th>
-                      <th>電話</th>
-                      <th>抵達時間</th>
-                      <th>狀態</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="booking in sameDayBookings" :key="booking.order_id" 
-                        :class="{ 'checked-in': booking.status === 'checked_in', 'cancelled': booking.status === 'cancelled' }">
-                      <td class="order-time">{{ formatDateTime(booking.created_at) }}</td>
-                      <td>{{ booking.room_type_name || booking.room_type_code }} x{{ booking.room_count }}{{ booking.bed_type ? ` (${booking.bed_type})` : '' }}</td>
-                      <td class="guest-name">{{ booking.guest_name }}</td>
-                      <td class="line-name">{{ booking.line_display_name || '-' }}</td>
-                      <td class="phone">{{ booking.phone }}</td>
-                      <td>{{ booking.arrival_time }}</td>
-                      <td>
-                        <span class="status-badge" :class="booking.status">
-                          {{ booking.status === 'checked_in' ? '🟢 已 KEY' : 
-                             booking.status === 'cancelled' ? '🔴 已取消' : 
-                             booking.status === 'interrupted' ? '🔵 預約中斷' : '🟡 待入住' }}
-                        </span>
-                      </td>
-                      <td class="action-buttons">
-                        <template v-if="booking.status === 'pending' || booking.status === 'interrupted'">
-                          <button class="key-btn" @click="markAsKeyed(booking.order_id)">
-                            標記已 KEY
-                          </button>
-                          <button class="cancel-btn" @click="cancelBooking(booking.order_id)">
-                            取消
-                          </button>
-                        </template>
-                        <span v-else-if="booking.status === 'checked_in'" class="done-text">✓ 已完成</span>
-                        <span v-else class="cancelled-text">✕ 已取消</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                <!-- 使用收折顯示：大訂單 > 小訂單 -->
+                <div v-for="group in groupedBookings" :key="group.order_id" class="order-group">
+                  <!-- 大訂單標題列（可點擊展開/收折） -->
+                  <div class="order-group-header">
+                    <span class="expand-icon" @click="toggleOrderExpand(group.order_id)">{{ isOrderExpanded(group.order_id) ? '▼' : '▶' }}</span>
+                    <span class="order-id" @click="toggleOrderExpand(group.order_id)">{{ group.order_id }}</span>
+                    <span class="guest-info" @click="toggleOrderExpand(group.order_id)">
+                      👤 {{ group.guest_name }} | 📞 {{ group.phone }} | 🕐 {{ group.arrival_time }}
+                    </span>
+                    <span class="room-count-badge">{{ group.items.length }} 間</span>
+                    <!-- 大訂單狀態顯示 -->
+                    <span v-if="group.groupStatus === 'cancelled'" class="group-status-cancelled">✕ 已取消</span>
+                    <span v-else-if="group.groupStatus === 'checked_in'" class="group-status-done">✓ 已 KEY</span>
+                    <span v-else-if="group.groupStatus === 'mismatch'" class="group-status-mismatch">⚠ KEY 錯</span>
+                    <span class="special-requests" v-if="group.items[0]?.special_requests">📝 {{ group.items[0].special_requests }}</span>
+                    <!-- 批次操作按鈕 -->
+                    <div class="group-actions" @click.stop>
+                      <!-- 正常狀態：已 KEY 按鈕 -->
+                      <button class="key-btn-sm" @click="markAllAsKeyed(group)" 
+                              v-if="group.groupStatus === 'pending'">
+                        已 KEY
+                      </button>
+                      <!-- KEY 錯狀態：重新匹配按鈕 -->
+                      <button class="mismatch-btn-sm" @click="markAllAsKeyed(group)" 
+                              v-if="group.groupStatus === 'mismatch'">
+                        重新匹配
+                      </button>
+                      <button class="cancel-btn-sm" @click="cancelAllBookings(group)"
+                              v-if="group.groupStatus === 'pending' || group.groupStatus === 'mismatch'">
+                        全部取消
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- 小訂單列表（展開時顯示） -->
+                  <div v-show="isOrderExpanded(group.order_id)" class="order-items">
+                    <div v-for="item in group.items" :key="item.item_id || item.order_id" 
+                         class="order-item-row"
+                         :class="{ 'checked-in': item.status === 'checked_in', 'cancelled': item.status === 'cancelled' }">
+                      <span class="item-room">
+                        {{ item.room_type_name || item.room_type_code }} x{{ item.room_count }}
+                        <span class="bed-type" v-if="item.bed_type">{{ item.bed_type }}</span>
+                      </span>
+                      <span class="item-status">
+                        <span v-if="item.status === 'checked_in'" class="done-text">✓ 已 KEY</span>
+                        <span v-else-if="item.status === 'cancelled'" class="cancelled-text">✕ 已取消</span>
+                        <!-- pending 狀態不顯示文字 -->
+                      </span>
+                      <span class="item-actions" v-if="item.status === 'pending' || item.status === 'interrupted'">
+                        <button class="cancel-btn-sm" @click.stop="cancelBooking(item.item_id || item.order_id)">
+                          取消
+                        </button>
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -384,6 +384,7 @@ router.get('/test-write-permission', async (req, res) => {
 /**
  * GET /api/bookings/same-day-list
  * 查詢當日暫存訂單列表（供 Admin Dashboard 使用）
+ * 自動比對 PMS 今日入住：如果同名同電話則不顯示（表示已 KEY 進 PMS）
  * 
  * 注意：此端點必須放在 /:booking_id 之前，否則會被通用路由攔截
  */
@@ -404,18 +405,84 @@ router.get('/same-day-list', async (req, res) => {
 
         // 只回傳今日的訂單
         const today = new Date().toISOString().slice(0, 10);
-        const todayBookings = bookings.filter(b => b.check_in_date === today);
+        let todayBookings = bookings.filter(b => b.check_in_date === today);
+
+        // 嘗試取得 PMS 今日入住名單進行比對
+        let pmsCheckins = [];
+        try {
+            const pool = db.getPool();
+            const connection = await pool.getConnection();
+            try {
+                pmsCheckins = await getCheckinBookings(connection, 0, "'O','I','N'");
+            } finally {
+                await connection.close();
+            }
+        } catch (pmsErr) {
+            console.log('無法取得 PMS 入住名單，跳過比對：', pmsErr.message);
+        }
+
+        // 比對邏輯：如果 PMS 今日入住中有同名同電話的訂單，自動標記為已 KEY
+        if (pmsCheckins.length > 0) {
+            // 建立 PMS 入住名單的姓名+電話組合集合
+            const pmsNamePhoneSet = new Set();
+            pmsCheckins.forEach(p => {
+                // PMS 資料可能是 LAST_NAM + FIRST_NAM 或 guest_name
+                const pmsName = (p.GLAST_NAM || '') + (p.GFIRST_NAM || '') || p.guest_name || '';
+                const pmsPhone = (p.PHONE || p.phone || '').replace(/[-\s]/g, '');
+                if (pmsName && pmsPhone) {
+                    pmsNamePhoneSet.add(`${pmsName.toLowerCase()}|${pmsPhone}`);
+                }
+            });
+
+            // 過濾暫存訂單：如果 PMS 中有同名同電話，自動標記為 checked_in
+            todayBookings = todayBookings.map(b => {
+                if (b.status === 'pending' || b.status === 'interrupted') {
+                    const bookingName = (b.guest_name || '').toLowerCase();
+                    const bookingPhone = (b.phone || '').replace(/[-\s]/g, '');
+                    const key = `${bookingName}|${bookingPhone}`;
+
+                    if (pmsNamePhoneSet.has(key)) {
+                        // 自動標記為已 KEY，不顯示在待處理列表
+                        return { ...b, status: 'checked_in', auto_matched: true };
+                    }
+                }
+                return b;
+            });
+
+            // 更新檔案中的狀態（自動標記的訂單）
+            const autoMatchedIds = todayBookings
+                .filter(b => b.auto_matched)
+                .map(b => b.item_id || b.temp_order_id);
+
+            if (autoMatchedIds.length > 0) {
+                const updatedBookings = bookings.map(b => {
+                    const id = b.item_id || b.temp_order_id;
+                    if (autoMatchedIds.includes(id)) {
+                        return { ...b, status: 'checked_in', auto_matched: true };
+                    }
+                    return b;
+                });
+                fs.writeFileSync(filePath, JSON.stringify(updatedBookings, null, 2), 'utf8');
+                console.log(`✅ 自動比對 PMS：${autoMatchedIds.length} 筆訂單已標記為已 KEY`);
+            }
+        }
+
+        // 過濾掉已入住的，只顯示待處理的
+        const pendingBookings = todayBookings.filter(b => b.status !== 'checked_in');
 
         res.json({
             success: true,
             data: {
                 date: today,
-                total: todayBookings.length,
-                bookings: todayBookings.map(b => ({
-                    order_id: b.temp_order_id,
+                total: pendingBookings.length,
+                bookings: pendingBookings.map(b => ({
+                    order_id: b.order_id || b.temp_order_id,
+                    item_id: b.item_id || b.temp_order_id,
                     room_type_code: b.room_type_code,
                     room_type_name: b.room_type_name,
                     room_count: b.room_count,
+                    bed_type: b.bed_type,
+                    special_requests: b.special_requests,
                     nights: b.nights,
                     guest_name: b.guest_name,
                     phone: b.phone,
@@ -477,7 +544,7 @@ router.patch('/same-day/:order_id/checkin', async (req, res) => {
             });
         }
 
-        const orderIndex = bookings.findIndex(b => b.temp_order_id === order_id);
+        const orderIndex = bookings.findIndex(b => b.temp_order_id === order_id || b.order_id === order_id);
         if (orderIndex === -1) {
             return res.status(404).json({
                 success: false,
@@ -517,6 +584,66 @@ router.patch('/same-day/:order_id/checkin', async (req, res) => {
 
 
 /**
+ * PATCH /api/bookings/same-day/:order_id/mismatch
+ * 標記暫存訂單為匹配失敗（KEY 錯）
+ */
+router.patch('/same-day/:order_id/mismatch', async (req, res) => {
+    try {
+        const { order_id } = req.params;
+        const dataDir = path.join(__dirname, '..', 'data');
+        const filePath = path.join(dataDir, 'same_day_bookings.json');
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({
+                success: false,
+                error: { code: 'NOT_FOUND', message: '找不到暫存訂單檔案' }
+            });
+        }
+
+        let bookings = [];
+        try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            bookings = JSON.parse(content);
+        } catch (e) {
+            return res.status(500).json({
+                success: false,
+                error: { code: 'READ_ERROR', message: '讀取暫存訂單失敗' }
+            });
+        }
+
+        const orderIndex = bookings.findIndex(b => b.temp_order_id === order_id || b.order_id === order_id || b.item_id === order_id);
+        if (orderIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                error: { code: 'NOT_FOUND', message: `找不到訂單編號 ${order_id}` }
+            });
+        }
+
+        bookings[orderIndex].status = 'mismatch';
+        bookings[orderIndex].mismatch_at = new Date().toISOString();
+        fs.writeFileSync(filePath, JSON.stringify(bookings, null, 2), 'utf8');
+
+        console.log(`⚠️ 暫存訂單標記為 KEY 錯：${order_id}`);
+
+        res.json({
+            success: true,
+            data: {
+                order_id: order_id,
+                status: 'mismatch',
+                message: 'PMS 匹配失敗，已標記為 KEY 錯'
+            }
+        });
+
+    } catch (err) {
+        console.error('標記 mismatch 失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: { code: 'UPDATE_ERROR', message: '更新訂單狀態時發生錯誤' }
+        });
+    }
+});
+
+/**
  * PATCH /api/bookings/same-day/:order_id/cancel
  * 取消暫存訂單（標記為取消，保留 LOG）
  */
@@ -550,7 +677,7 @@ router.patch('/same-day/:order_id/cancel', async (req, res) => {
             });
         }
 
-        const orderIndex = bookings.findIndex(b => b.temp_order_id === order_id);
+        const orderIndex = bookings.findIndex(b => b.temp_order_id === order_id || b.order_id === order_id);
         if (orderIndex === -1) {
             return res.status(404).json({
                 success: false,
@@ -730,7 +857,11 @@ router.post('/same-day', async (req, res) => {
         const today = new Date();
         const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
         const timeStr = today.toTimeString().slice(0, 8).replace(/:/g, '');
-        const tempOrderId = `SD${dateStr}${timeStr}`;
+
+        // 支援客戶端傳送 order_id（多房型訂單共用）和 item_id（每房型獨立）
+        // 預設格式：WI+月日時分
+        const orderId = req.body.order_id || `WI${dateStr.slice(4)}${timeStr.slice(0, 4)}`;
+        const itemId = req.body.item_id || orderId;  // 如果沒有 item_id，則使用 order_id（單房型訂單）
 
         // 計算入住與退房日期
         const checkInDate = today.toISOString().slice(0, 10);
@@ -739,10 +870,14 @@ router.post('/same-day', async (req, res) => {
 
         // 建立訂單資料
         const orderData = {
-            temp_order_id: tempOrderId,
+            order_id: orderId,              // 大訂單 ID（多房型共用）
+            item_id: itemId,                // 小項目 ID（每房型獨立，用於取消/操作）
+            temp_order_id: itemId,          // 保留向後相容
             room_type_code,
             room_type_name: room_type_name || room_type_code,
             room_count: parseInt(room_count) || 1,
+            bed_type: req.body.bed_type || null,      // 床型
+            special_requests: req.body.special_requests || null,  // 客人特殊需求
             nights: parseInt(nights) || 1,
             guest_name,
             phone,
@@ -780,12 +915,12 @@ router.post('/same-day', async (req, res) => {
         bookings.push(orderData);
         fs.writeFileSync(filePath, JSON.stringify(bookings, null, 2), 'utf8');
 
-        console.log(`📝 當日預訂已建立：${tempOrderId} - ${guest_name} - ${room_type_name} x${room_count}`);
+        console.log(`📝 當日預訂已建立：${itemId} - ${guest_name} - ${room_type_name} x${room_count}`);
 
         res.json({
             success: true,
             data: {
-                order_id: tempOrderId,
+                order_id: orderId,
                 guest_name,
                 room_type_name: orderData.room_type_name,
                 room_count: orderData.room_count,

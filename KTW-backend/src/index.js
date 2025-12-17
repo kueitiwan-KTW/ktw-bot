@@ -523,7 +523,7 @@ app.get('/api/pms/rooms/status', async (req, res) => {
 // 取得當日暫存訂單列表
 app.get('/api/pms/same-day-bookings', async (req, res) => {
     try {
-        const response = await fetch('http://192.168.8.3:3000/api/v1/bookings/same-day-list', {
+        const response = await fetch('http://192.168.8.3:3000/api/bookings/same-day-list', {
             signal: AbortSignal.timeout(5000)
         });
 
@@ -539,11 +539,79 @@ app.get('/api/pms/same-day-bookings', async (req, res) => {
     }
 });
 
-// 標記暫存訂單為已 KEY
+// 標記暫存訂單為已 KEY（含 PMS 匹配驗證）
 app.patch('/api/pms/same-day-bookings/:order_id/checkin', async (req, res) => {
     try {
         const { order_id } = req.params;
-        const response = await fetch(`http://192.168.8.3:3000/api/v1/bookings/same-day/${order_id}/checkin`, {
+
+        // 1. 先取得臨時訂單資訊
+        const sameDayRes = await fetch('http://192.168.8.3:3000/api/bookings/same-day-list', {
+            signal: AbortSignal.timeout(5000)
+        });
+
+        if (!sameDayRes.ok) {
+            return res.status(500).json({ success: false, error: '無法取得臨時訂單' });
+        }
+
+        const sameDayData = await sameDayRes.json();
+        const bookings = sameDayData.data?.bookings || [];
+
+        // 找到目標臨時訂單
+        const targetBooking = bookings.find(b =>
+            b.item_id === order_id || b.order_id === order_id
+        );
+
+        if (!targetBooking) {
+            return res.status(404).json({ success: false, error: '找不到該臨時訂單' });
+        }
+
+        // 2. 查詢 PMS 今日入住名單
+        const pmsRes = await fetch('http://192.168.8.3:3000/api/bookings/today-checkin', {
+            signal: AbortSignal.timeout(5000)
+        });
+
+        if (!pmsRes.ok) {
+            return res.status(500).json({ success: false, error: '無法查詢 PMS' });
+        }
+
+        const pmsData = await pmsRes.json();
+        const pmsBookings = pmsData.data || [];
+
+        // 3. 匹配：只比對電話（電話後 9 碼比對）
+        const targetPhone = (targetBooking.phone || '').replace(/\D/g, '').slice(-9);
+
+        console.log(`🔍 匹配中... 臨時訂單: ${targetBooking.guest_name} / ${targetPhone}`);
+
+        let matched = false;
+        for (const pms of pmsBookings) {
+            const pmsPhone = (pms.contact_phone || '').replace(/\D/g, '').slice(-9);
+
+            // 電話後 9 碼相同即匹配
+            if (pmsPhone === targetPhone && targetPhone.length >= 8) {
+                console.log(`✅ 匹配成功: ${pms.guest_name} / ${pms.contact_phone}`);
+                matched = true;
+                break;
+            }
+        }
+
+        if (!matched) {
+            console.log(`❌ 匹配失敗: 找不到同電話的 PMS 訂單`);
+
+            // 標記為 mismatch 狀態
+            await fetch(`http://192.168.8.3:3000/api/bookings/same-day/${order_id}/mismatch`, {
+                method: 'PATCH',
+                signal: AbortSignal.timeout(5000)
+            });
+
+            return res.json({
+                success: false,
+                mismatch: true,
+                error: 'PMS 中找不到同姓名同電話的訂單，請確認 PMS 資料是否正確'
+            });
+        }
+
+        // 4. 匹配成功，標記為已 KEY
+        const response = await fetch(`http://192.168.8.3:3000/api/bookings/same-day/${order_id}/checkin`, {
             method: 'PATCH',
             signal: AbortSignal.timeout(5000)
         });
@@ -556,6 +624,27 @@ app.patch('/api/pms/same-day-bookings/:order_id/checkin', async (req, res) => {
         }
     } catch (error) {
         console.error('標記訂單 API 錯誤:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 取消暫存訂單
+app.patch('/api/pms/same-day-bookings/:order_id/cancel', async (req, res) => {
+    try {
+        const { order_id } = req.params;
+        const response = await fetch(`http://192.168.8.3:3000/api/bookings/same-day/${order_id}/cancel`, {
+            method: 'PATCH',
+            signal: AbortSignal.timeout(5000)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            res.json(data);
+        } else {
+            res.status(response.status).json({ success: false, error: 'PMS API error' });
+        }
+    } catch (error) {
+        console.error('取消訂單 API 錯誤:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

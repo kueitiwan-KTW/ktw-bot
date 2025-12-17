@@ -1475,3 +1475,241 @@ body {
   color: #ef4444;
   padding: 20px;
 }
+
+/* ============================================
+   訂單收折顯示樣式（大訂單 > 小訂單）
+   ============================================ */
+
+.order-group {
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.order-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.order-group-header:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.order-group-header .expand-icon {
+  color: #888;
+  font-size: 0.75rem;
+  min-width: 12px;
+}
+
+.order-group-header .order-id {
+  font-family: 'Consolas', monospace;
+  color: #00d4ff;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.order-group-header .guest-info {
+  flex: 1;
+  color: #ccc;
+  font-size: 0.9rem;
+}
+
+.order-group-header .room-count-badge {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.order-group-header .order-time {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.order-items {
+  padding: 0 16px 12px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.order-items .same-day-table {
+  margin-top: 0;
+}
+
+.order-items .same-day-table th {
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* 小按鈕樣式 */
+.key-btn-sm {
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.key-btn-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.4);
+}
+
+.cancel-btn-sm {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.cancel-btn-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
+}
+
+/* 批次操作區域 */
+.group-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* 小訂單項目列 */
+.order-item-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 12px;
+}
+
+.order-item-row:last-child {
+  border-bottom: none;
+}
+
+.order-item-row.cancelled {
+  opacity: 0.5;
+}
+
+.order-item-row.checked-in {
+  opacity: 0.7;
+}
+
+.item-room {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.bed-type {
+  color: #888;
+  font-size: 0.85rem;
+  margin-left: 8px;
+}
+
+.item-status {
+  min-width: 80px;
+  text-align: center;
+}
+
+.item-actions {
+  min-width: 60px;
+  text-align: right;
+}
+
+/* 特殊需求標籤 */
+.special-requests {
+  color: #ff9800;
+  font-size: 0.85rem;
+  margin-left: 8px;
+}
+
+/* 大訂單整體狀態標籤 */
+.group-status-cancelled {
+  color: #ef4444;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  background: rgba(239, 68, 68, 0.15);
+  border-radius: 8px;
+  margin-left: 8px;
+}
+
+.group-status-done {
+  color: #4caf50;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  background: rgba(76, 175, 80, 0.15);
+  border-radius: 8px;
+  margin-left: 8px;
+}
+
+/* 已取消的大訂單整體淡化 */
+.order-group:has(.group-status-cancelled) .order-group-header {
+  opacity: 0.6;
+}
+
+/* KEY 錯狀態標籤 */
+.group-status-mismatch {
+  color: #ff9800;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: rgba(255, 152, 0, 0.2);
+  border-radius: 8px;
+  margin-left: 8px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* 重新匹配按鈕 */
+.mismatch-btn-sm {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.mismatch-btn-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+}
+
+/* KEY 錯的大訂單高亮 */
+.order-group:has(.group-status-mismatch) .order-group-header {
+  background: rgba(255, 152, 0, 0.15);
+  border-left: 3px solid #ff9800;
+}
