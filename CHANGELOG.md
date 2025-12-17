@@ -1,114 +1,75 @@
-# Changelog
+# KTW Hotel System - Changelog
 
-所有重要的變更都將記錄在此文件中。
+> 本文件記錄整個專案的重要變更。各模組的詳細變更請參閱各自的 CHANGELOG。
 
-## [1.1.5] - 2025-12-15
+## 模組 CHANGELOG 連結
 
-### 新增功能
-- **語音訊息辨識 (Voice to Text)**：
-  - 使用者可直接發送語音訊息給 Bot
-  - Bot 會自動將語音轉換為文字並回應
-  - 採用 Gemini 2.5 Flash 多模態模型進行聽打
-  - 支援繁體中文辨識
-  - 語音指令效果等同於打字輸入
-
-### 技術實作
-- **新增 `handle_audio` 方法**：在 `bot.py` 中處理 LINE `AudioMessage`
-- **新增 Webhook Handler**：在 `app.py` 中註冊 `AudioMessage` 事件監聽器
-
-### AI 語音辨識技術對比
-
-| 技術 | 優點 | 缺點 | 使用情境 |
-|:---|:---|:---|:---|
-| **Gemini 2.5 Flash** ✅ 採用 | 速度最快、整合簡單、無額外費用 | 準確度略低於 Whisper | 即時客服互動 |
-| **OpenAI Whisper V3** | 純語音辨識最準確 | 需額外 API、延遲較高 | 專業轉錄需求 |
-| **Gemini 1.5 Pro** | 語意理解最強 | 速度較慢、成本較高 | 高精度需求 |
+- [LINE Bot](./LINEBOT/CHANGELOG.md) - LINE 客服機器人
+- [Admin Dashboard](./KTW-admin-web/CHANGELOG.md) - 管理後台
+- [Backend API](./KTW-backend/CHANGELOG.md) - 後端 API 服務
+- [PMS API](./pms-api/CHANGELOG.md) - PMS 資料庫 API
 
 ---
 
-## [1.1.1] - 2025-12-12
+## [1.1.6] - 2025-12-17
 
-### 新增功能
-- **知識庫擴充**：新增 4 筆常見問題
-  - 寵物政策說明（寵物友善，清潔費 800 元/房）
-  - 嬰兒用品租借服務（嬰兒床、圍欄、消毒鍋、澡盆）
-  - 早餐服務說明（自助式/套餐式）
-  - 櫃檯服務時間（15:00-23:00）
+### LINE Bot
+- **修復**: 天氣查詢功能 (環境變數引號問題)
+- **改善**: 錯誤處理機制 (完善 LOG 記錄)
+- **新增**: 天氣資訊增強 (降雨機率、體感溫度)
+- 詳見: [LINEBOT/CHANGELOG.md](./LINEBOT/CHANGELOG.md#116---2025-12-17)
 
-### 改進優化
-- **對話歷史自動重置機制**：
-  - 當對話歷史過長導致 AI token 超限時，自動清除對話歷史
-  - 向用戶提示「對話歷史已自動清除，請再次提供訂單編號」
-  - 解決長期用戶無法獲得回應的問題
+---
 
-- **錯誤訊息日誌完善**：
-  - 修復錯誤訊息未記錄到 chat log 的問題
-  - 所有 Bot 回應（包括錯誤訊息）現在都會正確記錄
+## [1.1.5] - 2025-12-15
 
-### 修復問題
-- 修復長對話歷史（3000+ 行）導致 Gemini AI 返回 `finish_reason=1` 錯誤的問題
-- 修復 ValueError 錯誤處理流程中缺少日誌記錄的問題
+### LINE Bot
+- **新增**: 語音訊息辨識功能 (Voice to Text)
+- 詳見: [LINEBOT/CHANGELOG.md](./LINEBOT/CHANGELOG.md#115---2025-12-15)
 
-## [1.1.0] - 2025-12-11
+---
 
-### 新增功能
-- **重新開始對話功能**：用戶可輸入「重新開始」、「reset」、「restart」或「清除對話」來重置對話歷史
-- **早餐資訊自動判斷**：系統會從備註和房型名稱中檢查「不含早」關鍵字，自動判斷是否包含早餐
-- **房型對照表獨立管理**：將房型對照表從代碼中抽離到 `room_types.json`，便於維護和更新
+## [1.1.1] - 2025-12-16
 
-### 改進優化
-- **訂單來源判斷邏輯優化**：
-  - 優先檢查 `remarks` 中的關鍵字（「官網」、「agoda」、「booking.com」）
-  - 其次才使用 OTA ID 前綴判斷（RMAG、RMPGP）
-  - 修正了誤將官網訂單判定為 Booking.com 的問題
+### Admin Dashboard
+- **修復**: 客人卡片展開連動問題
+- **清理**: 移除調試代碼
+- 詳見: [KTW-admin-web/CHANGELOG.md](./KTW-admin-web/CHANGELOG.md#v111-2025-12-16)
 
-- **PMS API 數據處理增強**：
-  - 支援大寫鍵名（`ROOM_TYPE_CODE`、`ROOM_COUNT`、`ROOM_TYPE_NAME`）
-  - 同時兼容小寫鍵名，提高容錯性
-  - 修復房型顯示「無」的問題
+---
 
-- **AI 模型升級**：
-  - 主對話模型：Gemini 2.0 Flash Exp → Gemini 2.5 Flash
-  - 提供更好的理解能力和回應品質
+## [1.1.0] - 2025-12-15
 
-- **系統指令優化**：
-  - 加強訂單詳情顯示要求，確保 Bot 不會跳過顯示步驟
-  - 添加正確/錯誤流程示例，提高 AI 遵守指令的準確性
+### Admin Dashboard
+- **新增**: 真實 PMS API 數據整合
+- **新增**: 30 秒倒數計時器
+- **優化**: 差異化更新頻率
+- 詳見: [KTW-admin-web/CHANGELOG.md](./KTW-admin-web/CHANGELOG.md#v110-2025-12-15)
 
-### 錯誤修復
-- **修復 KeyError 問題**：
-  - 修復 `room_type_name` KeyError（當值為 `null` 時）
-  - 修復 `room_count` KeyError（使用 `.get()` 方法並設置默認值）
-  - 所有字典訪問都改用安全的 `.get()` 方法
-
-- **修復隱私檢查邏輯**：
-  - 修正 Gmail 隱私檢查的 AI validator 提示詞
-  - 明確處理未來訂單（DAYS_AGO < 0）的情況
-  - 確保近期訂單和未來訂單都能正常顯示
-
-### 技術文檔
-- **Notion 技術文檔建立**：
-  - 7 個獨立分類頁面（系統架構、資料庫、BOT 流程、API 規格、欄位對照、配置、故障排除）
-  - 全繁體中文
-  - 自動同步功能
-
-### 代碼品質
-- 移除 17 行硬編碼的房型字典，改為 3 行 JSON 載入
-- 改善代碼可維護性和可讀性
-- 統一錯誤處理方式
+### LINE Bot
+- **新增**: 重新開始對話功能
+- **新增**: 早餐資訊自動判斷
+- **新增**: 房型對照表獨立管理
+- **改進**: 訂單來源判斷邏輯優化
+- **升級**: AI 模型 (Gemini 2.5 Flash)
+- 詳見: [LINEBOT/CHANGELOG.md](./LINEBOT/CHANGELOG.md#110---2025-12-11)
 
 ---
 
 ## [1.0.1] - 2025-12-10
 
 ### 初始版本
-- PMS API 整合（Oracle 資料庫）
 - LINE Bot 基本功能
-- 訂單查詢系統（3-Step 協議）
-- Gmail API 整合（備用訂單來源）
-- Google Gemini AI 整合
-- 天氣預報功能
-- 客人資訊收集與更新
-- SQLite 本地資料庫
-- 對話歷史記錄
+- PMS API 整合
 - Admin Dashboard
+- Gmail API 整合
+- 天氣預報功能
+
+---
+
+## 版本命名規則
+
+遵循 [Semantic Versioning](https://semver.org/):
+- **主版本 (X)**: 重大架構變更或不兼容的 API 修改
+- **次版本 (Y)**: 新增功能,向後兼容
+- **修訂版本 (Z)**: Bug 修復和小改進

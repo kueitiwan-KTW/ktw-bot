@@ -1204,12 +1204,23 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
             return reply_text
         except Exception as e:
             import traceback
-            traceback.print_exc()
-            print(f"Gemini API Error: {e}")
-            # If session fails (e.g. history too long or other error), reset it for this user
-            print(f"Resetting session for user: {user_id}")
-            self.user_sessions[user_id] = self.model.start_chat(enable_automatic_function_calling=True)
-            return "【客服回覆】\n不好意思，剛才連線有點問題，請您再說一次好嗎？"
+            error_details = traceback.format_exc()
+            print(f"❌ Gemini API Error: {e}")
+            print(f"📋 Full Error Traceback:\n{error_details}")
+            
+            # 記錄錯誤到 LOG (供管理員除錯,但不發送給客戶)
+            error_log = f"[系統錯誤] Gemini API 異常: {str(e)[:200]}"
+            self.logger.log(user_id, "System Error", error_log)
+            
+            # Reset session for this user to recover from error state
+            print(f"🔄 Resetting session for user: {user_id} due to error")
+            if user_id in self.user_sessions:
+                del self.user_sessions[user_id]
+            
+            # 不回覆任何訊息,讓客戶重新發送
+            # 這樣可以避免客戶看到「連線有點問題」這種不專業的訊息
+            # 返回空字串,由 app.py 判斷是否要發送訊息
+            return ""  # 返回空字串,app.py 需要檢查並跳過發送
 
     def handle_audio(self, user_id, audio_content, display_name):
         """

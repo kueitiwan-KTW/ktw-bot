@@ -125,11 +125,17 @@ def handle_message(event):
     reply_text = re.sub(r'(?<!\*)\*(?!\*)', '', reply_text)  # Remove single * (but not **)
     reply_text = re.sub(r'_', '', reply_text)     # Remove _
     
-    # Reply via LINE Messaging API
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_text)
-    )
+    # 檢查是否有回覆內容 (空字串表示系統錯誤,不發送訊息)
+    if reply_text and reply_text.strip():
+        # Reply via LINE Messaging API
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply_text)
+        )
+    else:
+        # 系統錯誤,不發送任何訊息
+        # 用戶會看到「已讀」但沒有回應,可以重新發送訊息
+        print(f"⚠️ Bot returned empty response for user {user_id}, skipping reply")
 
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image(event):

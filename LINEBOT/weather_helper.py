@@ -128,7 +128,7 @@ class WeatherHelper:
             "Authorization": self.api_key,
             "format": "JSON",
             "locationName": self.location_name,
-            "elementName": "天氣現象,最低溫度,最高溫度"
+            "elementName": "天氣現象,最低溫度,最高溫度,12小時降雨機率,最高體感溫度,最低體感溫度"
         }
         response = requests.get(self.base_url, params=params)
         response.raise_for_status()
@@ -168,8 +168,27 @@ class WeatherHelper:
         wx = weather_elements["天氣現象"][best_match_idx]["ElementValue"][0]["Weather"]
         min_t = weather_elements["最低溫度"][best_match_idx]["ElementValue"][0]["MinTemperature"]
         max_t = weather_elements["最高溫度"][best_match_idx]["ElementValue"][0]["MaxTemperature"]
-
-        return f"入住當天車城鄉天氣{wx}，氣溫約 {min_t}°C - {max_t}°C (資料來源：中央氣象署)"
+        
+        # 新增: 降雨機率和體感溫度
+        pop = weather_elements["12小時降雨機率"][best_match_idx]["ElementValue"][0]["ProbabilityOfPrecipitation"]
+        min_at = weather_elements["最低體感溫度"][best_match_idx]["ElementValue"][0]["MinApparentTemperature"]
+        max_at = weather_elements["最高體感溫度"][best_match_idx]["ElementValue"][0]["MaxApparentTemperature"]
+        
+        # 組合回覆訊息
+        result = f"入住當天車城鄉天氣{wx}，氣溫約 {min_t}°C - {max_t}°C"
+        
+        # 如果體感溫度與實際溫度差異較大 (>2度),顯示體感溫度
+        if abs(int(min_at) - int(min_t)) > 2 or abs(int(max_at) - int(max_t)) > 2:
+            result += f"，體感溫度 {min_at}°C - {max_at}°C"
+        
+        # 加入降雨機率
+        pop_int = int(pop)
+        if pop_int > 0:
+            result += f"，降雨機率 {pop}%"
+        
+        result += " (資料來源：中央氣象署)"
+        
+        return result
 
     def get_weekly_forecast(self):
         """
