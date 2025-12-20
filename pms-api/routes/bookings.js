@@ -295,6 +295,76 @@ router.get('/tomorrow-checkin', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/bookings/checkin-by-date
+ * 查詢指定日期的入住訂單清單
+ * 
+ * Query Parameters:
+ *   - date: 要查詢的日期 (YYYY-MM-DD 格式)
+ *   - offset: 相對於今天的偏移天數 (可選，與 date 二選一)
+ */
+router.get('/checkin-by-date', async (req, res) => {
+    try {
+        const { date, offset } = req.query;
+
+        let dateOffset;
+        let targetDate;
+
+        if (date) {
+            // 計算日期偏移
+            const inputDate = new Date(date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            inputDate.setHours(0, 0, 0, 0);
+            dateOffset = Math.round((inputDate - today) / (24 * 60 * 60 * 1000));
+            targetDate = date;
+        } else if (offset !== undefined) {
+            dateOffset = parseInt(offset) || 0;
+            const d = new Date();
+            d.setDate(d.getDate() + dateOffset);
+            targetDate = d.toISOString().split('T')[0];
+        } else {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'MISSING_PARAMETER',
+                    message: '請提供 date 或 offset 參數'
+                }
+            });
+        }
+
+        const pool = db.getPool();
+        const connection = await pool.getConnection();
+
+        try {
+            // 未來日期用預訂狀態，過去/今天用入住狀態
+            const statusFilter = dateOffset > 1 ? "'O','N','R'" : "'O','I','N'";
+            const bookings = await getCheckinBookings(connection, dateOffset, statusFilter);
+
+            res.json({
+                success: true,
+                data: bookings,
+                count: bookings.length,
+                date: targetDate,
+                date_offset: dateOffset
+            });
+
+        } finally {
+            await connection.close();
+        }
+
+    } catch (err) {
+        console.error('查詢指定日期入住失敗：', err);
+        res.status(500).json({
+            success: false,
+            error: {
+                code: 'DATABASE_ERROR',
+                message: '查詢指定日期入住時發生錯誤'
+            }
+        });
+    }
+});
+
 
 /**
  * GET /api/bookings/test-write-permission

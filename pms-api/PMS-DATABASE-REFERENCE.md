@@ -569,5 +569,5 @@ ORDER BY ROOM_COD
 
 ---
 
-*最後更新：2025-12-17*
+*最後更新：2025-12-21*
 *資料來源：PMS Server (192.168.8.3) - GDWUUKT Schema*

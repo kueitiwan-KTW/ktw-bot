@@ -425,22 +425,38 @@ Your Knowledge Base (FAQ):
                 HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE
             }
             
-            # Generation config for more deterministic function calling
-            generation_config = {
-                'temperature': 0.2,  # Lower temperature for more consistent function calling
+            # Generation config for strict mode (state machine flows)
+            generation_config_strict = {
+                'temperature': 0.2,  # 嚴謹模式：狀態機流程、Function Calling
                 'top_p': 0.8,
                 'top_k': 20,
             }
             
-            # Main model for conversation and function calling
+            # Generation config for chat mode (casual conversation)
+            generation_config_chat = {
+                'temperature': 0.5,  # 聊天模式：一般對話、VIP 服務
+                'top_p': 0.9,
+                'top_k': 40,
+            }
+            
+            # Main model for strict flows (order query, same-day booking, function calling)
             self.model = genai.GenerativeModel(
                 model_name='gemini-3-flash-preview',
                 tools=self.tools,
                 system_instruction=self.system_instruction,
                 safety_settings=safety_settings,
-                generation_config=generation_config
+                generation_config=generation_config_strict
             )
-            print("✅ HotelBot initialized.")
+            
+            # Chat model for casual conversation (idle state, general Q&A)
+            self.model_chat = genai.GenerativeModel(
+                model_name='gemini-3-flash-preview',
+                tools=self.tools,
+                system_instruction=self.system_instruction,
+                safety_settings=safety_settings,
+                generation_config=generation_config_chat
+            )
+            print("✅ HotelBot initialized (Strict: 0.2, Chat: 0.5)")
             
             # Vision model for OCR tasks (keep 2.0, already excellent)
             self.vision_model = genai.GenerativeModel(
@@ -1401,12 +1417,35 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
             print(f"⚠️ Error reading conversation history: {e}")
             return None
 
-    def get_user_session(self, user_id):
-        """Retrieves or creates a chat session for the given user."""
-        if user_id not in self.user_sessions:
-            print(f"Creating new chat session for user: {user_id}")
-            self.user_sessions[user_id] = self.model.start_chat(enable_automatic_function_calling=True)
-        return self.user_sessions[user_id]
+    def get_user_session(self, user_id, use_chat_mode: bool = None):
+        """
+        Retrieves or creates a chat session for the given user.
+        
+        Args:
+            user_id: LINE User ID
+            use_chat_mode: 
+                - True: 使用聊天版 model (temperature 0.5)
+                - False: 使用嚴謹版 model (temperature 0.2)
+                - None: 根據狀態機自動判斷
+        """
+        # 自動判斷模式
+        if use_chat_mode is None:
+            state = self.state_machine.get_state(user_id)
+            # 閒置狀態 = 聊天模式，其他狀態 = 嚴謹模式
+            use_chat_mode = (state == 'idle')
+        
+        # 選擇對應的 model
+        model = self.model_chat if use_chat_mode else self.model
+        mode_name = "Chat(0.5)" if use_chat_mode else "Strict(0.2)"
+        
+        # Session key 包含模式，確保切換模式時重建 session
+        session_key = f"{user_id}_{mode_name}"
+        
+        if session_key not in self.user_sessions:
+            print(f"Creating new {mode_name} session for user: {user_id}")
+            self.user_sessions[session_key] = model.start_chat(enable_automatic_function_calling=True)
+        
+        return self.user_sessions[session_key]
 
     def reset_conversation(self, user_id):
         """重置用戶對話：清除 chat session 和對話歷史"""

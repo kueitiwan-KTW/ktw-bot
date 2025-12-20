@@ -111,8 +111,30 @@ class VIPServiceHandler(BaseHandler):
             self.state_machine.set_data(user_id, 'pending_task', image_task)
             return f"{role_title}，好的，請傳送您要{image_task['description']}的圖片。"
         
-        # 3. 房況查詢
-        if any(kw in message for kw in ['房況', '今天房況', '住房率', '空房']):
+        # 3. 週報查詢（本週/週末）- 必須放在今日房況之前
+        week_keywords = ['這禮拜', '這星期', '本週', '這周']
+        weekend_keywords = ['這週末', '週末', '這個週末', '本週末']
+        month_keywords = ['本月', '這個月', '這月']
+        
+        if any(kw in message for kw in weekend_keywords):
+            result = internal_query.query_week_forecast(scope='weekend')
+            return f"{role_title}，{result.get('message')}"
+        
+        if any(kw in message for kw in month_keywords):
+            result = internal_query.query_month_forecast()
+            return f"{role_title}，{result.get('message')}"
+        
+        if any(kw in message for kw in week_keywords):
+            result = internal_query.query_week_forecast(scope='week')
+            return f"{role_title}，{result.get('message')}"
+        
+        # 4. 今日房況查詢（擴充口語用法）
+        room_status_keywords = [
+            '房況', '今天房況', '住房率', '空房',
+            '多少人住', '幾間房', '幾個人住', '住幾間',
+            '今天住', '住房狀況', '房間狀況', '入住率'
+        ]
+        if any(kw in message for kw in room_status_keywords):
             result = internal_query.query_today_status()
             return f"{role_title}，{result.get('message')}"
         

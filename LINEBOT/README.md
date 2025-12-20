@@ -15,8 +15,9 @@ LINE Bot 是 KTW Hotel 的智能客服系統,整合 Google Gemini AI、PMS API �
 - ✅ 天氣預報查詢
 - ✅ 語音訊息辨識
 - ✅ 圖片訂單識別
-- ✅ VIP 客戶管理
-- ✅ **對話狀態持久化** (NEW)
+- ✅ VIP 客戶管理 (Modular FSM)
+- ✅ **營運報表精準化與預測** (NEW)
+- ✅ **對話狀態持久化**
 
 ---
 
@@ -207,8 +208,8 @@ pm2 restart Line-Bot-Py
 
 ## 📝 版本資訊
 
-- **當前版本**: v1.5.0
-- **最後更新**: 2025-12-20
+- **當前版本**: v1.8.0
+- **最後更新**: 2025-12-21
 - **維護者**: KTW Hotel IT Team
 
 詳細變更記錄請參閱 [CHANGELOG.md](./CHANGELOG.md)

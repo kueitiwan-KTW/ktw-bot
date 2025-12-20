@@ -34,23 +34,194 @@ class InternalQueryHandler:
                     total = stats.get('totalRooms', 0)
                     occupied = stats.get('occupiedRooms', 0)
                     rate = round((occupied / total * 100), 1) if total > 0 else 0
+                    checkin_count = stats.get('todayCheckin', 0)
+                    checkout_count = stats.get('todayCheckout', 0)
+                    
+                    # 額外取得今日入住的房間總數
+                    checkin_rooms = 0
+                    try:
+                        checkin_resp = requests.get(
+                            f"{self.backend_url}/api/pms/today-checkin",
+                            timeout=5
+                        )
+                        if checkin_resp.status_code == 200:
+                            checkin_data = checkin_resp.json()
+                            for b in checkin_data.get('data', []):
+                                # 優先用 room_numbers 陣列長度，其次用 room_count
+                                room_numbers = b.get('room_numbers', [])
+                                checkin_rooms += len(room_numbers) if room_numbers else b.get('room_count', 1)
+                    except:
+                        checkin_rooms = checkin_count  # 備援：假設 1:1
                     
                     return {
                         'success': True,
-                        'today_checkin': stats.get('todayCheckin', 0),
-                        'today_checkout': stats.get('todayCheckout', 0),
+                        'today_checkin': checkin_count,
+                        'today_checkin_rooms': checkin_rooms,
+                        'today_checkout': checkout_count,
                         'occupied_rooms': occupied,
                         'total_rooms': total,
                         'vacant_rooms': total - occupied,
                         'occupancy_rate': rate,
                         'message': f"📊 今日房況：\n"
-                                   f"• 入住：{stats.get('todayCheckin', 0)} 組\n"
-                                   f"• 退房：{stats.get('todayCheckout', 0)} 組\n"
+                                   f"• 入住：{checkin_count} 筆 / {checkin_rooms} 間\n"
+                                   f"• 退房：{checkout_count} 筆\n"
                                    f"• 住房率：{rate}% ({occupied}/{total})\n"
                                    f"• 空房：{total - occupied} 間"
                     }
             
             return {'success': False, 'message': '❌ 無法取得房況資訊'}
+            
+        except Exception as e:
+            return {'success': False, 'message': f'❌ 查詢失敗: {str(e)}'}
+    
+    def query_week_forecast(self, scope: str = 'week') -> dict:
+        """
+        查詢本週/週末入住預測
+        
+        Args:
+            scope: 'week' (本週一到日), 'weekend' (週五六日), 'this_week' (今天到本週日)
+            
+        Returns:
+            dict: 包含各日入住數預測
+        """
+        try:
+            today = datetime.now()
+            weekday = today.weekday()  # 0=週一, 6=週日
+            
+            # 計算日期範圍
+            if scope == 'weekend':
+                # 週五六日
+                days_to_friday = (4 - weekday) % 7
+                start_date = today + timedelta(days=days_to_friday)
+                dates = [start_date + timedelta(days=i) for i in range(3)]
+                title = "本週末 (五六日)"
+            else:
+                # 本週（今天到週日）
+                days_to_sunday = 6 - weekday
+                dates = [today + timedelta(days=i) for i in range(days_to_sunday + 1)]
+                title = f"本週 ({today.strftime('%m/%d')}~{dates[-1].strftime('%m/%d')})"
+            
+            # 調用 PMS API 取得各日入住數
+            lines = [f"📅 {title} 入住預測：\n"]
+            total_bookings = 0
+            total_rooms = 0
+            
+            for d in dates:
+                date_str = d.strftime('%Y-%m-%d')
+                weekday_name = ['一', '二', '三', '四', '五', '六', '日'][d.weekday()]
+                
+                # 計算相對天數（0=今天, 1=明天, ...）
+                days_offset = (d.date() - datetime.now().date()).days
+                
+                # 根據日期選擇 API
+                booking_count = 0
+                room_count = 0
+                
+                try:
+                    # 使用統一的 API 端點查詢任意日期
+                    response = requests.get(
+                        f"{self.pms_api_url}/api/bookings/checkin-by-date",
+                        params={'date': date_str},
+                        timeout=5
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        bookings = data.get('data', [])
+                        booking_count = len(bookings)
+                        # 加總每筆訂單的房間數（優先用 room_numbers 長度）
+                        for b in bookings:
+                            room_numbers = b.get('room_numbers', [])
+                            room_count += len(room_numbers) if room_numbers else b.get('room_count', 1)
+                except Exception as e:
+                    print(f"⚠️ 查詢 {date_str} 失敗: {e}")
+                
+                total_bookings += booking_count
+                total_rooms += room_count
+                
+                lines.append(f"• {d.strftime('%m/%d')} (週{weekday_name})：{booking_count} 筆 / {room_count} 間")
+            
+            lines.append(f"\n📊 合計：{total_bookings} 筆訂單 / {total_rooms} 間房")
+            
+            return {
+                'success': True,
+                'total_bookings': total_bookings,
+                'total_rooms': total_rooms,
+                'message': '\n'.join(lines)
+            }
+            
+        except Exception as e:
+            return {'success': False, 'message': f'❌ 查詢失敗: {str(e)}'}
+    
+    def query_month_forecast(self) -> dict:
+        """
+        查詢本月入住統計（剩餘天數）
+        
+        Returns:
+            dict: 包含本月剩餘各日入住數預測
+        """
+        try:
+            today = datetime.now()
+            
+            # 計算本月剩餘天數
+            # 取得本月最後一天
+            if today.month == 12:
+                last_day = datetime(today.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                last_day = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
+            
+            remaining_days = (last_day.date() - today.date()).days + 1
+            
+            # 限制查詢天數（避免太多 API 調用）
+            if remaining_days > 14:
+                remaining_days = 14
+                title = f"本月後 14 天 ({today.strftime('%m/%d')}~{(today + timedelta(days=13)).strftime('%m/%d')})"
+            else:
+                title = f"本月剩餘 ({today.strftime('%m/%d')}~{last_day.strftime('%m/%d')})"
+            
+            lines = [f"📅 {title} 入住預測：\n"]
+            total_bookings = 0
+            total_rooms = 0
+            
+            dates = [today + timedelta(days=i) for i in range(remaining_days)]
+            
+            for d in dates:
+                date_str = d.strftime('%Y-%m-%d')
+                weekday_name = ['一', '二', '三', '四', '五', '六', '日'][d.weekday()]
+                
+                booking_count = 0
+                room_count = 0
+                
+                try:
+                    # 使用統一的 API 端點查詢任意日期
+                    response = requests.get(
+                        f"{self.pms_api_url}/api/bookings/checkin-by-date",
+                        params={'date': date_str},
+                        timeout=5
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        bookings = data.get('data', [])
+                        booking_count = len(bookings)
+                        for b in bookings:
+                            room_numbers = b.get('room_numbers', [])
+                            room_count += len(room_numbers) if room_numbers else b.get('room_count', 1)
+                except Exception as e:
+                    print(f"⚠️ 查詢 {date_str} 失敗: {e}")
+                
+                total_bookings += booking_count
+                total_rooms += room_count
+                lines.append(f"• {d.strftime('%m/%d')} (週{weekday_name})：{booking_count} 筆 / {room_count} 間")
+            
+            lines.append(f"\n📊 合計：{total_bookings} 筆訂單 / {total_rooms} 間房")
+            
+            return {
+                'success': True,
+                'total_bookings': total_bookings,
+                'total_rooms': total_rooms,
+                'message': '\n'.join(lines)
+            }
             
         except Exception as e:
             return {'success': False, 'message': f'❌ 查詢失敗: {str(e)}'}

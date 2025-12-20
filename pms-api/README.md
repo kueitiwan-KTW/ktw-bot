@@ -8,6 +8,7 @@ Oracle PMS 系統的 REST API 服務，為 LINE Bot 提供訂單查詢功能。
 - ✅ 查詢單一訂單詳細資訊
 - ✅ 查詢可用房間
 - ✅ 建立/更新訂單狀態 (Checkin/Cancel/Mismatch)
+- ✅ **動態日期入住查詢 (checkin-by-date)** (NEW)
 - ⏸️ 建立新訂單（後續開發）
 - ⏸️ 取消訂單（後續開發）
 
@@ -78,6 +79,7 @@ GET /api/health
 ```http
 GET /api/bookings/search?name={name}
 GET /api/bookings/search?phone={phone}
+GET /api/bookings/checkin-by-date?date={YYYY-MM-DD}
 ```
 
 **參數**:
@@ -271,6 +273,6 @@ ORACLE_CLIENT_LIB_DIR=D:\\app\\product\\12.2.0\\dbhome_1\\bin
 ## ✍️ 維護資訊
 
 **創建日期**: 2025-12-10 - **當前版本**: v1.7.0
-**最後更新**: 2025-12-17
+**最後更新**: 2025-12-21
 **維護者**: KTW Hotel IT Team
-**版本**: 1.7.0
+**版本**: 1.9.0

@@ -4,6 +4,55 @@
 
 ---
 
+## [1.8.0] - 2025-12-21
+
+### ✨ 新功能：營運報表擴展
+
+1. **增強型房況查詢 (Rooms Accuracy)**
+   - **檔案**: `handlers/internal_query.py` (L47-50, L144-150)
+   - **修改**: 房間數計算邏輯從 `room_count` 欄位改為解析 `room_numbers` 陣列長度。
+   - **理由**: PMS API 返回的 `room_count` 恆為 1，需解析分配房號陣列才能獲得準確間數。
+   - **影響**: 修正今日/本週/本月房況中的間數統計錯誤。
+
+2. **本月房況預測 (Monthly Forecast)**
+   - **檔案**: `handlers/internal_query.py` (L156-227)
+   - **新增**: `query_month_forecast()` 函數。
+   - **功能**: 支援查詢當月剩餘天數入住預測，並對接遠端 `/checkin-by-date` 端點。
+
+3. **關鍵字優先權調整**
+   - **檔案**: `handlers/vip_service_handler.py` (L114-135)
+   - **修改**: 將週報/月報關鍵字偵測順序移至今日房況之前。
+   - **理由**: 防止「這禮拜住幾間」被「住幾間」攔截。
+
+### 🔧 優化
+
+1. **API 調用統一化**
+   - **檔案**: `handlers/internal_query.py` (L120-136, L200-213)
+   - **變更**: 週報與月報全面改用遠端 PMS API 的 `/checkin-by-date` 端點，取代原有的 `/search` 端點以獲取更詳細資料。
+---
+
+## [1.7.5] - 2025-12-21
+
+### ✨ 核心架構：Modular VIP FSM (模組化狀態機)
+為了提升代碼的可維護性與擴充性，將 VIP 服務從 `bot.py` 抽離，建立獨立的狀態機處理流程。
+
+1. **VIP 處理器模組化 (Handler Decoupling)**
+   - **檔案**: `handlers/vip_service_handler.py` (L26-392)
+   - **實作**: 新增 `VIPServiceHandler` 類別，封裝所有 VIP 邏輯。
+   - **理由**: 解決 `bot.py` 體積過大（Spaghetti Code）問題。
+
+2. **有限狀態機 導入 (Finite State Machine)**
+   - **檔案**: `handlers/vip_service_handler.py` (L36-37, L69, L110)
+   - **狀態**: `vip_idle` (閒置), `vip_waiting_image` (等待圖片)。
+   - **功能**: 支援跨對話的任務狀態記憶（例如：主管先下令「幫我翻譯」，Bot 轉入等待圖片狀態）。
+
+3. **bot.py 路由重構 (Router Refactor)**
+   - **檔案**: `bot.py` (L1541-1547)
+   - **變更**: 移除 `_handle_internal_vip_query` 等舊函數，統一由 `vip_service` 實例分發。
+   - **影響**: 顯著提升 VIP 功能的穩定性，並解決狀態遺失問題。
+
+---
+
 ## [1.7.1] - 2025-12-20
 
 ### 🐛 Bug 修復
