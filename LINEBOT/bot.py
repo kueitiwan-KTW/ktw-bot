@@ -573,6 +573,17 @@ Your Knowledge Base (FAQ):
         # 3. Check if we found anything (必須在備援檢查之後)
         if not order_info:
             print(f"📭 Order not found in any source: {order_id}")
+            
+            # ✨ 暫存客人資料以便日後匹配
+            from helpers.pending_guest import get_pending_guest_manager
+            pending_manager = get_pending_guest_manager()
+            pending_manager.save_pending(
+                user_id=self.current_user_id,
+                order_id=order_id,
+                guest_name=guest_name,
+                phone=phone
+            )
+            
             return {"status": "not_found", "order_id": order_id}
 
         # 4. Extract Order ID (different logic for PMS vs Gmail)
@@ -580,6 +591,18 @@ Your Knowledge Base (FAQ):
             # PMS data is already clean and structured
             pms_id = order_info['data']['booking_id']
             ota_id = order_info['data'].get('ota_booking_id', '')
+            
+            # ✨ 檢查是否有待匹配的暫存資料
+            from helpers.pending_guest import get_pending_guest_manager
+            pending_manager = get_pending_guest_manager()
+            pending_data = pending_manager.find_pending(self.current_user_id, ota_id or pms_id)
+            
+            if pending_data:
+                print(f"🔗 找到待匹配的暫存資料: {pending_data}")
+                # 標記為已匹配
+                pending_manager.mark_matched(self.current_user_id, pending_data['provided_order_id'])
+                # 將暫存資料加入返回結果
+                order_info['pending_matched'] = pending_data
             
             # DEBUG: 輸出完整的 API 返回資料
             print(f"🔍 DEBUG - API Response Data: {order_info['data']}")
@@ -642,12 +665,24 @@ Your Knowledge Base (FAQ):
             print(f"🔍 Found Order: ID={order_id}, Found={found_id}, Subject={found_subject}")
             
             # 總是返回 confirmation_needed，讓 AI 詢問客人確認
-            return {
+            result = {
                 "status": "confirmation_needed",
                 "found_order_id": found_id,
                 "found_subject": found_subject,
                 "message": f"I found an order with ID {found_id}. Please ask the user if this is correct."
             }
+            
+            # ✨ 如有匹配的暫存資料，加入提示
+            if order_info.get('pending_matched'):
+                pending = order_info['pending_matched']
+                result['pending_matched'] = {
+                    "phone": pending.get('phone', ''),
+                    "arrival_time": pending.get('arrival_time', ''),
+                    "special_requests": pending.get('special_requests', ''),
+                    "note": f"您之前查詢時已提供的資料：電話 {pending.get('phone', '無')}、抵達時間 {pending.get('arrival_time', '無')}。訂單確認後將自動補上。"
+                }
+            
+            return result
 
         # 3. Privacy & Detail Step (Only if Confirmed)
         from datetime import datetime, timedelta
