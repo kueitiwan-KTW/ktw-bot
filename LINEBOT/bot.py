@@ -489,7 +489,17 @@ Your Knowledge Base (FAQ):
             )
             print("✅ VIPServiceHandler initialized.")
             
+            # 🔧 方案 C：啟動時自動重試匹配暫存資料
+            try:
+                from helpers.pending_guest import retry_pending_matches
+                matched = retry_pending_matches(self.pms_client, self.logger)
+                if matched > 0:
+                    print(f"🔄 啟動時自動匹配了 {matched} 筆暫存資料")
+            except Exception as e:
+                print(f"⚠️ 啟動時重試匹配失敗: {e}")
+            
         print("系統啟動：旅館專業客服機器人 (AI Vision + Function Calling + Multi-User + Logging + Weather版) 已就緒。")
+
 
     def _load_json(self, path):
         try:
@@ -607,7 +617,7 @@ Your Knowledge Base (FAQ):
                 
                 # ✨ 正式同步資料至 SQLite 與 JSON 日誌
                 sync_order_details(
-                    order_id=pms_id, # 正式同步時使用 PMS ID
+                    order_id=pms_id,
                     data={
                         "guest_name": pending_data.get('guest_name'),
                         "phone": pending_data.get('phone'),
@@ -616,8 +626,10 @@ Your Knowledge Base (FAQ):
                         "line_display_name": pending_data.get('line_display_name') or getattr(self, 'current_display_name', None)
                     },
                     logger=self.logger,
-                    pms_client=self.pms_client
+                    pms_client=self.pms_client,
+                    ota_id=ota_id  # 🔧 方案 B：雙重儲存
                 )
+
                 
                 # 標記為已匹配
                 pending_manager.mark_matched(self.current_user_id, pending_data['provided_order_id'])

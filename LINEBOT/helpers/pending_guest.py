@@ -175,3 +175,75 @@ def get_pending_guest_manager() -> PendingGuestManager:
     if _pending_guest_manager is None:
         _pending_guest_manager = PendingGuestManager()
     return _pending_guest_manager
+
+
+def retry_pending_matches(pms_client, logger) -> int:
+    """
+    🔧 方案 C：延遲重試機制
+    
+    定期重新嘗試匹配暫存資料與 PMS API。
+    當之前查無訂單的資料，現在 PMS 已同步時，自動完成關聯。
+    
+    Args:
+        pms_client: PMS API 客戶端
+        logger: ChatLogger 實例
+    
+    Returns:
+        成功匹配的數量
+    """
+    from helpers.order_helper import sync_order_details
+    
+    manager = get_pending_guest_manager()
+    data = manager._load_data()
+    
+    matched_count = 0
+    
+    for key, value in list(data.items()):
+        if value.get('status') != 'pending':
+            continue
+        
+        order_id = value.get('provided_order_id')
+        user_id = value.get('user_id')
+        
+        if not order_id:
+            continue
+        
+        # 嘗試查詢 PMS
+        try:
+            result = pms_client.get_booking_details(order_id)
+            
+            if result and result.get('success'):
+                pms_data = result.get('data', {})
+                pms_id = pms_data.get('booking_id')
+                ota_id = pms_data.get('ota_booking_id', order_id)
+                
+                print(f"🔄 [Retry] 找到匹配: {order_id} → PMS:{pms_id}")
+                
+                # 同步資料
+                sync_order_details(
+                    order_id=pms_id,
+                    data={
+                        "guest_name": value.get('guest_name'),
+                        "phone": value.get('phone'),
+                        "arrival_time": value.get('arrival_time'),
+                        "line_user_id": user_id,
+                        "display_name": value.get('line_display_name'),
+                        "special_requests": value.get('special_requests', '').split('; ') if value.get('special_requests') else []
+                    },
+                    logger=logger,
+                    pms_client=pms_client,
+                    ota_id=ota_id
+                )
+                
+                # 標記為已匹配
+                manager.mark_matched(user_id, order_id)
+                matched_count += 1
+                
+        except Exception as e:
+            print(f"⚠️ [Retry] 查詢失敗 {order_id}: {e}")
+            continue
+    
+    if matched_count > 0:
+        print(f"✅ [Retry] 本次重試成功匹配 {matched_count} 筆資料")
+    
+    return matched_count

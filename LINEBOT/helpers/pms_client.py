@@ -443,6 +443,50 @@ class PMSClient:
             print(f"❌ 同步擴充資料失敗: {e}")
             return False
 
+    def save_user_order_link(self, line_user_id: str, pms_id: str, 
+                             ota_id: str = None, check_in_date: str = None) -> bool:
+        """
+        🔧 方案 D：儲存用戶訂單關聯
+        
+        Args:
+            line_user_id: LINE 用戶 ID
+            pms_id: PMS 訂單 ID
+            ota_id: OTA 訂單 ID（可選）
+            check_in_date: 入住日期（可選）
+            
+        Returns:
+            是否成功
+        """
+        if not self.enabled or not line_user_id or not pms_id:
+            return False
+            
+        try:
+            # 使用本地後端 API
+            local_url = "http://localhost:3000/api/user-orders"
+            
+            payload = {
+                'line_user_id': line_user_id,
+                'pms_id': pms_id,
+                'ota_id': ota_id,
+                'check_in_date': check_in_date
+            }
+            
+            print(f"📡 User Order Link: POST {local_url}")
+            
+            response = requests.post(local_url, json=payload, timeout=5)
+            
+            if response.status_code == 200:
+                print(f"✅ 用戶訂單關聯已儲存: {line_user_id} → {pms_id}")
+                return True
+            else:
+                print(f"⚠️ 儲存用戶訂單關聯失敗: HTTP {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 儲存用戶訂單關聯失敗: {e}")
+            return False
+
+
 # 测试代码
 if __name__ == "__main__":
     print("Testing PMS Client...")

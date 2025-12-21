@@ -1,10 +1,25 @@
 # Backend API - Changelog
 
-> 後端 API 服務的詳細變更記錄
+> 後端# KTW Backend Changelog
 
----
+## [1.6.0] - 2025-12-21
+### ✨ 新功能：用戶訂單關聯 (方案 D)
+**檔案**: `src/helpers/db.js`, `src/index.js`
+- **新資料表**: `user_order_mapping` 記錄 LINE 用戶與訂單的對應關係
+- **API 端點**:
+  - `GET /api/user-orders/:userId` - 取得用戶訂單列表
+  - `GET /api/user-orders/:userId/latest` - 取得用戶最近訂單
+  - `POST /api/user-orders` - 儲存用戶訂單關聯
 
-## [1.2.0] - 2025-12-20
+## [1.5.0] - 2025-12-21
+### ✨ 新功能：OTA/PMS 雙重匹配機制 (方案 A)
+**檔案**: `src/index.js` (L90-110, L139-145)
+- **問題**: 當 Bot 資料存在 OTA ID 下，後端用 PMS ID 查詢會找不到
+- **修復**: `processBookings` 現在同時收集 PMS ID、完整 OTA ID、純數字 OTA
+- **搜索順序**: OTA ID → 純數字 OTA → PMS ID
+- **影響**: 林宛錡等案例資料現可正確顯示 LINE 姓名與需求
+
+## [1.4.0] - 2025-12-20
 
 ### ✨ 新功能：Bot Session 持久化 (Session Persistence)
 

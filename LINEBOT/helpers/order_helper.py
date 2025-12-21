@@ -105,47 +105,86 @@ def get_resume_message(pending_intent: str) -> str:
     }
     return messages.get(pending_intent, "")
 
-def sync_order_details(order_id: str, data: Dict[str, Any], logger: Any, pms_client: Any) -> bool:
+def sync_order_details(order_id: str, data: Dict[str, Any], logger: Any, pms_client: Any, ota_id: str = None) -> bool:
     """
     統一同步訂單詳情到客訴資料庫 (JSON) 與 SQLite 擴充表。
     確保資訊紀錄的一致性 (SSOT)。
+    
+    🔧 方案 B：OTA ID 與 PMS ID 雙重儲存
+    - 當兩個 ID 都存在時，同時存兩份資料
+    - 無論用哪個 ID 查詢都能找到
     """
-    if not order_id:
+    # 收集所有需要儲存的 ID（去重）
+    storage_keys = []
+    if ota_id:
+        storage_keys.append(ota_id)
+        # 也儲存純數字版本
+        clean_ota = re.sub(r'^[A-Z]+', '', ota_id)
+        if clean_ota != ota_id:
+            storage_keys.append(clean_ota)
+    if order_id and order_id not in storage_keys:
+        storage_keys.append(order_id)
+    
+    if not storage_keys:
         return False
-        
-    try:
-        # 1. 儲存到 guest_orders.json (透過 ChatLogger)
-        if logger:
-            full_order = {
-                'order_id': order_id,
-                'guest_name': data.get('guest_name'),
-                'phone': data.get('phone'),
-                'arrival_time': data.get('arrival_time'),
-                'special_requests': data.get('special_requests', []),
-                'line_user_id': data.get('line_user_id'),
-                'line_display_name': data.get('display_name'),
-                'updated_at': datetime.now().isoformat()
-            }
-            # 保留原有 JSON 中的其他欄位（若有提供）
-            for field in ['check_in', 'check_out', 'room_type', 'booking_source']:
-                if field in data:
-                    full_order[field] = data[field]
-                    
-            logger.save_order(full_order)
-            print(f"✅ [Sync] Order {order_id} saved to JSON")
 
-        # 2. 同步到 SQLite (透過 PMSClient 調用後端 API)
-        if pms_client:
-            sync_payload = {
-                'confirmed_phone': data.get('phone'),
-                'arrival_time': data.get('arrival_time'),
-                'ai_extracted_requests': "; ".join(data.get('special_requests', [])) if data.get('special_requests') else None,
-                'line_name': data.get('display_name')
-            }
-            pms_client.update_supplement(order_id, sync_payload)
-            print(f"✅ [Sync] Order {order_id} synced to SQLite")
-            
+    try:
+        for key in storage_keys:
+            # 1. 儲存到 guest_orders.json (透過 ChatLogger)
+            if logger:
+                full_order = {
+                    'order_id': key,
+                    'pms_id': order_id,  # 保留 PMS ID 參考
+                    'ota_id': ota_id,    # 保留 OTA ID 參考
+                    'guest_name': data.get('guest_name'),
+                    'phone': data.get('phone'),
+                    'arrival_time': data.get('arrival_time'),
+                    'special_requests': data.get('special_requests', []),
+                    'line_user_id': data.get('line_user_id'),
+                    'line_display_name': data.get('display_name'),
+                    'updated_at': datetime.now().isoformat()
+                }
+                for field in ['check_in', 'check_out', 'room_type', 'booking_source']:
+                    if field in data:
+                        full_order[field] = data[field]
+                        
+                logger.save_order(full_order)
+
+            # 2. 同步到 SQLite (透過 PMSClient 調用後端 API)
+            if pms_client:
+                # 🔧 AI 提取需求加入時間戳 [MM/DD HH:MM]
+                timestamp = datetime.now().strftime('%m/%d %H:%M')
+                special_reqs = data.get('special_requests', [])
+                if special_reqs:
+                    ai_requests = "; ".join([f"[{timestamp}] {req}" for req in special_reqs])
+                else:
+                    ai_requests = None
+                
+                sync_payload = {
+                    'confirmed_phone': data.get('phone'),
+                    'arrival_time': data.get('arrival_time'),
+                    'ai_extracted_requests': ai_requests,
+                    'line_name': data.get('display_name')
+                }
+                pms_client.update_supplement(key, sync_payload)
+
+        
+        # 3. 🔧 方案 D：儲存用戶訂單關聯
+        if pms_client and data.get('line_user_id') and order_id:
+            try:
+                pms_client.save_user_order_link(
+                    line_user_id=data.get('line_user_id'),
+                    pms_id=order_id,
+                    ota_id=ota_id,
+                    check_in_date=data.get('check_in')
+                )
+            except Exception as e:
+                print(f"⚠️ [Sync] 儲存用戶訂單關聯失敗: {e}")
+        
+        print(f"✅ [Sync] Order synced to {len(storage_keys)} keys: {storage_keys}")
         return True
     except Exception as e:
-        print(f"❌ [Sync] Failed to sync order {order_id}: {e}")
+        print(f"❌ [Sync] Failed to sync order: {e}")
         return False
+
+

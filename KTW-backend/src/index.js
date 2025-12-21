@@ -7,7 +7,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import dotenv from 'dotenv';
-import { getSupplement, getAllSupplements, updateSupplement, getBotSession, updateBotSession, deleteBotSession, getAllVipUsers, getVipUser, addVipUser, deleteVipUser } from './helpers/db.js';
+import { getSupplement, getAllSupplements, updateSupplement, getBotSession, updateBotSession, deleteBotSession, getAllVipUsers, getVipUser, addVipUser, deleteVipUser, saveUserOrderLink, getUserOrders, getUserLatestOrder } from './helpers/db.js';
 import { getBookingSource } from './helpers/bookingSource.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -89,13 +89,22 @@ function matchGuestOrder(booking, guestOrders) {
 
 // 🔄 共用的訂單資料處理函數（供今日/昨日/明日 API 使用）
 async function processBookings(bookings, guestOrders, profiles = {}) {
-    // 取得所有訂單 ID 用於批次查詢 SQLite
-    const bookingIds = bookings.map(b => b.booking_id);
-    const supplements = await getAllSupplements(bookingIds);
+    // 取得所有訂單 ID 用於批次查詢 SQLite（包含 PMS ID 和 OTA ID）
+    const allIds = [];
+    bookings.forEach(b => {
+        allIds.push(b.booking_id); // PMS ID
+        if (b.ota_booking_id) {
+            allIds.push(b.ota_booking_id); // 完整 OTA ID (如 RMAG1671721966)
+            const cleanOta = b.ota_booking_id.replace(/^[A-Z]+/, ''); // 純數字 OTA
+            if (cleanOta !== b.ota_booking_id) allIds.push(cleanOta);
+        }
+    });
+    const supplements = await getAllSupplements([...new Set(allIds)]); // 去重
     const supplementMap = supplements.reduce((acc, curr) => {
         acc[curr.booking_id] = curr;
         return acc;
     }, {});
+
 
     return bookings.map(booking => {
         // 1. OTA 訂單號
@@ -129,7 +138,12 @@ async function processBookings(bookings, guestOrders, profiles = {}) {
 
         // 6. 整合 Bot 與 SQLite 資料
         const botInfo = matchGuestOrder(booking, guestOrders);
-        const supplement = supplementMap[booking.booking_id];
+        // 🔧 雙重匹配：OTA ID → 純數字 OTA → PMS ID 順序查詢
+        const cleanOta = (booking.ota_booking_id || '').replace(/^[A-Z]+/, '');
+        const supplement = supplementMap[booking.ota_booking_id]  // 1. 完整 OTA ID
+            || supplementMap[cleanOta]                 // 2. 純數字 OTA
+            || supplementMap[booking.booking_id];      // 3. PMS ID
+
 
         // 7. 處理房型
         let roomTypeName = '未知房型';
@@ -505,17 +519,17 @@ app.get('/api/pms/yesterday-checkin', async (req, res) => {
     }
 });
 
-// 取得明日入住客人清單
-app.get('/api/pms/tomorrow-checkin', async (req, res) => {
+// 取得指定日期偏移的入住客人清單 (v1.9.5 通用路由)
+app.get('/api/pms/checkin-by-offset/:offset', async (req, res) => {
     try {
-        const response = await fetch('http://192.168.8.3:3000/api/bookings/tomorrow-checkin', {
+        const offset = req.params.offset;
+        const response = await fetch(`http://192.168.8.3:3000/api/bookings/checkin-by-date?offset=${offset}`, {
             signal: AbortSignal.timeout(5000)
         });
 
         if (response.ok) {
             const data = await response.json();
             if (data.success && data.data) {
-                // 使用共用的資料處理函數
                 const guestOrders = getGuestOrders();
                 const profiles = getUserProfiles();
                 data.data = await processBookings(data.data, guestOrders, profiles);
@@ -525,7 +539,7 @@ app.get('/api/pms/tomorrow-checkin', async (req, res) => {
             res.status(response.status).json({ success: false, error: 'PMS API error' });
         }
     } catch (error) {
-        console.error('明日入住API錯誤:', error);
+        console.error(`Offset ${req.params.offset} 入住 API 錯誤:`, error);
         res.status(500).json({ success: false, error: error.message, data: [] });
     }
 });
@@ -927,6 +941,53 @@ app.delete('/api/vip/:userId', async (req, res) => {
         }
     } catch (error) {
         console.error('刪除 VIP 用戶失敗:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// 🔧 方案 D：用戶訂單關聯 API (User Order Mapping)
+// ============================================
+
+// 取得用戶關聯的訂單列表
+app.get('/api/user-orders/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const orders = await getUserOrders(userId);
+        res.json({ success: true, data: orders, count: orders.length });
+    } catch (error) {
+        console.error('取得用戶訂單關聯失敗:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 取得用戶最近的訂單
+app.get('/api/user-orders/:userId/latest', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const order = await getUserLatestOrder(userId);
+        res.json({ success: true, data: order });
+    } catch (error) {
+        console.error('取得用戶最近訂單失敗:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 儲存用戶訂單關聯
+app.post('/api/user-orders', async (req, res) => {
+    try {
+        const { line_user_id, pms_id, ota_id, check_in_date } = req.body;
+
+        if (!line_user_id || !pms_id) {
+            return res.status(400).json({ success: false, error: 'line_user_id 和 pms_id 為必填' });
+        }
+
+        const result = await saveUserOrderLink(line_user_id, pms_id, ota_id, check_in_date);
+        console.log(`🔗 用戶訂單關聯已儲存: ${line_user_id} → ${pms_id}`);
+
+        res.json({ success: true, message: '用戶訂單關聯已儲存', data: result });
+    } catch (error) {
+        console.error('儲存用戶訂單關聯失敗:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });

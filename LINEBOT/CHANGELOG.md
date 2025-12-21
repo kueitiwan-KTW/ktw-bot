@@ -4,6 +4,44 @@
 
 ---
 
+## [1.9.6] - 2025-12-21
+### 🐛 Bug 修復：查無訂單時住客資料同步失效
+**檔案**: `handlers/order_query_handler.py` (L145-175)
+- **問題**: 當 PMS/Gmail 查不到訂單時，Handler 會直接中斷流程，導致 LINE 姓名與需求無法同步至後台。
+- **修復**: 在查詢失敗分支加入「強制同步」邏輯，從 `pending_guests.json` 提取資料完成關聯。
+
+### ✨ 新功能：OTA/PMS ID 雙重儲存 (方案 B)
+**檔案**: `helpers/order_helper.py` (L108-170)
+- **邏輯**: `sync_order_details` 現在同時儲存三份資料：OTA ID、純數字 OTA、PMS ID
+- **調用處**: `bot.py`, `order_query_handler.py` 皆已更新傳入 `ota_id` 參數
+- **效果**: 無論用哪個 ID 查詢都能找到擴充資料
+
+### ✨ 新功能：延遲重試機制 (方案 C)
+**檔案**: `helpers/pending_guest.py` (L178-250), `bot.py` (L491-500)
+- **功能**: `retry_pending_matches()` 函數，啟動時自動重試匹配暫存資料
+- **效果**: 當 PMS 延遲入庫時，Bot 重啟後可自動補齊關聯
+
+### ✨ 新功能：AI 提取需求加入時間戳
+**檔案**: `helpers/order_helper.py` (L154-162)
+- **格式**: `[MM/DD HH:MM] 需求內容`（如 `[12/21 15:38] 需要停車位`）
+- **效果**: 可追蹤客人何時提出需求
+
+
+## [1.9.5] - 2025-12-21
+
+### ✨ 整合與故障排除
+
+#### 1. Admin Web 故障排除 (Critical)
+- **檔案**: `KTW-admin-web/src/App.vue` (L1)
+- **問題**: 第一行意外包含 Markdown 語法（三個反引號），導致 Vite 編譯失敗。
+- **修復**: 移除非法語法並重啟 PM2 服務。
+- **影響**: 恢復 Admin Dashboard 的正常訪問。
+
+#### 2. 正式同步暫存資料
+- **檔案**: `LINEBOT/bot.py` (L604-620)
+- **修改**: 當 `bot.py` 匹配到暫存客人資料時，調用 `sync_order_details` 正式將資訊同步至 SQLite 資料庫。
+- **目的**: 確保所有管道收集的資訊（包含暫存匹配）都能在 Admin Dashboard 顯示。
+
 ## [1.9.4] - 2025-12-21
 
 ### ✨ 整合與故障排除
@@ -35,6 +73,8 @@
 #### 2. Handler 與 Bot 瘦身
 - **檔案**: `LINEBOT/handlers/order_query_handler.py` (L100-650)
 - **檔案**: `LINEBOT/bot.py` (L730-850)
+- [v1.9.6](./LINEBOT/CHANGELOG.md) - 🔧 修正查無訂單時住客資料同步失效問題
+- [v1.9.5](./LINEBOT/CHANGELOG.md) - ✨ 住客資訊 8 日預覽與分析穩定性優化
 - **修改**: 移除重複的電話、OTA 格式化與顯示邏輯，全面導入 `order_helper`。
 
 ## [1.9.2] - 2025-12-21

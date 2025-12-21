@@ -24,7 +24,8 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 });
 
 function initDb() {
-    const schema = `
+    // 1. guest_supplements 表
+    const supplementsSchema = `
         CREATE TABLE IF NOT EXISTS guest_supplements (
             booking_id TEXT PRIMARY KEY,
             confirmed_phone TEXT,
@@ -35,9 +36,22 @@ function initDb() {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
     `;
-    db.run(schema, (err) => {
+
+    // 2. 🔧 方案 D：user_order_mapping 表（用戶訂單關聯）
+    const mappingSchema = `
+        CREATE TABLE IF NOT EXISTS user_order_mapping (
+            line_user_id TEXT NOT NULL,
+            pms_id TEXT,
+            ota_id TEXT,
+            check_in_date TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (line_user_id, pms_id)
+        );
+    `;
+
+    db.run(supplementsSchema, (err) => {
         if (err) {
-            console.error('❌ 初始化資料庫失敗:', err.message);
+            console.error('❌ 初始化 guest_supplements 失敗:', err.message);
         } else {
             console.log('✅ guest_supplements 資料表就緒');
             // 檢查是否需要新增 line_name 欄位 (遷移)
@@ -51,7 +65,16 @@ function initDb() {
             });
         }
     });
+
+    db.run(mappingSchema, (err) => {
+        if (err) {
+            console.error('❌ 初始化 user_order_mapping 失敗:', err.message);
+        } else {
+            console.log('✅ user_order_mapping 資料表就緒');
+        }
+    });
 }
+
 
 /**
  * 取得訂單擴充資料
@@ -326,6 +349,73 @@ export function deleteBotSession(userId) {
             if (err) reject(err);
             else resolve({ changes: this.changes });
         });
+    });
+}
+
+// ============================================
+// 🔧 方案 D：用戶訂單關聯 (User Order Mapping)
+// ============================================
+
+/**
+ * 儲存用戶與訂單的關聯
+ * @param {string} lineUserId - LINE 用戶 ID
+ * @param {string} pmsId - PMS 訂單 ID
+ * @param {string} otaId - OTA 訂單 ID
+ * @param {string} checkInDate - 入住日期
+ */
+export function saveUserOrderLink(lineUserId, pmsId, otaId, checkInDate) {
+    const updatedAt = new Date().toISOString();
+
+    return new Promise((resolve, reject) => {
+        const sql = `
+            INSERT INTO user_order_mapping (line_user_id, pms_id, ota_id, check_in_date, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(line_user_id, pms_id) DO UPDATE SET
+                ota_id = excluded.ota_id,
+                check_in_date = excluded.check_in_date,
+                updated_at = excluded.updated_at
+        `;
+
+        db.run(sql, [lineUserId, pmsId, otaId, checkInDate, updatedAt], function (err) {
+            if (err) reject(err);
+            else resolve({ changes: this.changes });
+        });
+    });
+}
+
+/**
+ * 取得用戶關聯的訂單列表
+ * @param {string} lineUserId - LINE 用戶 ID
+ * @returns {Promise<Array>} 關聯的訂單列表
+ */
+export function getUserOrders(lineUserId) {
+    return new Promise((resolve, reject) => {
+        db.all(
+            'SELECT * FROM user_order_mapping WHERE line_user_id = ? ORDER BY updated_at DESC',
+            [lineUserId],
+            (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            }
+        );
+    });
+}
+
+/**
+ * 取得用戶最近的訂單
+ * @param {string} lineUserId - LINE 用戶 ID
+ * @returns {Promise<Object|null>} 最近的訂單關聯
+ */
+export function getUserLatestOrder(lineUserId) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            'SELECT * FROM user_order_mapping WHERE line_user_id = ? ORDER BY updated_at DESC LIMIT 1',
+            [lineUserId],
+            (err, row) => {
+                if (err) reject(err);
+                else resolve(row || null);
+            }
+        );
     });
 }
 

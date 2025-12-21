@@ -144,6 +144,33 @@ class OrderQueryHandler(BaseHandler):
         
         else:
             # 找不到訂單
+            # ✨ [修正] 即使找不到訂單，也嘗試從暫存區同步資料到 SQLite/JSON
+            # 這是為了讓管理後台能透過 OTA ID 看到 LINE 姓名與需求
+            try:
+                from helpers.pending_guest import get_pending_guest_manager
+                pending_manager = get_pending_guest_manager()
+                pending_data = pending_manager.find_pending(user_id, order_id)
+                
+                if pending_data:
+                    print(f"🔗 [Force Sync] 查無訂單但找到暫存資料，正在強制同步: {order_id}")
+                    sync_order_details(
+                        order_id=order_id,
+                        data={
+                            "guest_name": pending_data.get('guest_name'),
+                            "phone": pending_data.get('phone'),
+                            "arrival_time": pending_data.get('arrival_time'),
+                            "line_user_id": user_id,
+                            "display_name": pending_data.get('line_display_name') or getattr(self, 'current_display_name', None),
+                            "special_requests": pending_data.get('special_requests', [])
+                        },
+                        logger=self.logger,
+                        pms_client=self.pms_client,
+                        ota_id=order_id  # 🔧 查無訂單時，order_id 本身就是 OTA ID
+                    )
+
+            except Exception as e:
+                print(f"⚠️ [Force Sync] 執行失敗: {e}")
+
             self.clear_session(user_id)
             return f"""抱歉，找不到訂單編號 {order_id}。
 
@@ -530,8 +557,10 @@ class OrderQueryHandler(BaseHandler):
             order_id=order_id,
             data=sync_data,
             logger=self.logger,
-            pms_client=self.pms_client
+            pms_client=self.pms_client,
+            ota_id=order_data.get('ota_booking_id')  # 🔧 方案 B：雙重儲存
         )
+
     
     # ============================================
     # 輔助方法 - 從郵件提取資訊

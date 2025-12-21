@@ -18,8 +18,31 @@ const widgets = ref([
   { id: 'vacant', title: '空房數', x: 9, y: 0, w: 3, h: 2, visible: true, collapsed: false },
   { id: 'rooms', title: '即時房況', x: 0, y: 2, w: 12, h: 5, visible: true, collapsed: false },
   { id: 'sameday', title: 'LINE 當日預訂', x: 0, y: 6, w: 12, h: 4, visible: true, collapsed: false },
-  { id: 'guests', title: '昨今明入住資訊', x: 0, y: 10, w: 12, h: 4, visible: true, collapsed: false },
+  { id: 'guests', title: '入住資訊 (8日預覽)', x: 0, y: 10, w: 12, h: 4, visible: true, collapsed: false },
 ])
+
+// 分頁配置：昨、今、明 + 未來 5 天
+const GUEST_TABS_CONFIG = [
+  { offset: -1, label: '昨日' },
+  { offset: 0, label: '今日' },
+  { offset: 1, label: '明日' },
+  { offset: 2, label: null }, // 動態日期 1
+  { offset: 3, label: null }, // 動態日期 2
+  { offset: 4, label: null }, // 動態日期 3
+  { offset: 5, label: null }, // 動態日期 4
+  { offset: 6, label: null }  // 動態日期 5
+]
+
+// 格式化 Tab 標籤文字
+function getTabLabel(config) {
+  if (config.label) return config.label
+  
+  const date = new Date()
+  date.setDate(date.getDate() + config.offset)
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  return `${month}/${day}`
+}
 
 // 切換面板收折狀態
 function toggleCollapse(index) {
@@ -27,7 +50,15 @@ function toggleCollapse(index) {
 }
 
 // 入住資訊 Tab 切換
-const activeGuestTab = ref('today') // today, yesterday, tomorrow
+const activeGuestOffset = ref(0) // 以 offset 作為 key
+
+// 使用 reactive 儲存各天資料，確保深層反應性
+const guestTabs = reactive({})
+
+// 初始化各分頁屬性
+GUEST_TABS_CONFIG.forEach(cfg => {
+  guestTabs[cfg.offset.toString()] = { data: [], loading: false }
+})
 
 // 統計資料 (從 PMS API 取得)
 const stats = ref({
@@ -76,94 +107,48 @@ function sortGuestsByStatus(guests) {
   });
 }
 
-// 今日入住客人清單
-const todayGuests = ref([])
-const guestsLoading = ref(true)
-
 // 展開狀態管理（使用數組儲存已展開的卡片 ID）
 const expandedCards = ref([])
 
-function toggleCardExpand(bookingId) {
-  const index = expandedCards.value.indexOf(bookingId)
+function toggleCardExpand(cardKey) {
+  const index = expandedCards.value.indexOf(cardKey)
   if (index > -1) {
-    expandedCards.value = expandedCards.value.filter(id => id !== bookingId)
+    expandedCards.value = expandedCards.value.filter(id => id !== cardKey)
   } else {
-    expandedCards.value = [...expandedCards.value, bookingId]
+    expandedCards.value = [...expandedCards.value, cardKey]
   }
 }
 
-function isCardExpanded(bookingId) {
-  return expandedCards.value.includes(bookingId)
+function isCardExpanded(cardKey) {
+  return expandedCards.value.includes(cardKey)
 }
 
-
-// 從 Node.js Core 取得今日入住客人
-async function fetchTodayCheckin() {
-  guestsLoading.value = true
+// 智慧抓取各天入住資料
+async function fetchGuestData(offset) {
+  const tab = guestTabs[offset.toString()]
+  if (!tab) return
+  
+  tab.loading = true
   try {
-    const res = await fetch(`${API_BASE}/api/pms/today-checkin`, {
+    const res = await fetch(`${API_BASE}/api/pms/checkin-by-offset/${offset}`, {
       signal: AbortSignal.timeout(5000)
     })
     if (res.ok) {
       const result = await res.json()
       if (result.success) {
-        // 依狀態排序
-        todayGuests.value = sortGuestsByStatus(result.data || [])
+        tab.data = sortGuestsByStatus(result.data || [])
       }
     }
   } catch (error) {
-    console.error('Fetch today checkin error:', error)
+    console.error(`Fetch guests (offset ${offset}) error:`, error)
   } finally {
-    guestsLoading.value = false
+    tab.loading = false
   }
 }
 
-// 昨日入住客人清單
-const yesterdayGuests = ref([])
-const yesterdayLoading = ref(true)
-
-async function fetchYesterdayCheckin() {
-  yesterdayLoading.value = true
-  try {
-    const res = await fetch(`${API_BASE}/api/pms/yesterday-checkin`, {
-      signal: AbortSignal.timeout(5000)
-    })
-    if (res.ok) {
-      const result = await res.json()
-      if (result.success) {
-        // 依狀態排序
-        yesterdayGuests.value = sortGuestsByStatus(result.data || [])
-      }
-    }
-  } catch (error) {
-    console.error('Fetch yesterday checkin error:', error)
-  } finally {
-    yesterdayLoading.value = false
-  }
-}
-
-// 明日入住客人清單
-const tomorrowGuests = ref([])
-const tomorrowLoading = ref(true)
-
-async function fetchTomorrowCheckin() {
-  tomorrowLoading.value = true
-  try {
-    const res = await fetch(`${API_BASE}/api/pms/tomorrow-checkin`, {
-      signal: AbortSignal.timeout(5000)
-    })
-    if (res.ok) {
-      const result = await res.json()
-      if (result.success) {
-        // 依狀態排序
-        tomorrowGuests.value = sortGuestsByStatus(result.data || [])
-      }
-    }
-  } catch (error) {
-    console.error('Fetch tomorrow checkin error:', error)
-  } finally {
-    tomorrowLoading.value = false
-  }
+// 供手動刷新與初始化使用
+async function fetchAllGuestTabs() {
+  await Promise.all(GUEST_TABS_CONFIG.map(cfg => fetchGuestData(cfg.offset)))
 }
 
 // ============================================
@@ -358,9 +343,7 @@ async function manualRefresh() {
   
   await Promise.all([
     fetchPMSDashboard(),
-    fetchTodayCheckin(),
-    fetchYesterdayCheckin(),
-    fetchTomorrowCheckin(),
+    fetchAllGuestTabs(),
     fetchRoomStatus(),
     fetchSameDayBookings(),
     checkServiceStatus()
@@ -496,14 +479,8 @@ onMounted(() => {
   pmsInterval = setInterval(fetchPMSDashboard, 15000)
   
   // 入住客人清單 (每30秒)
-  fetchTodayCheckin()
-  fetchYesterdayCheckin()
-  fetchTomorrowCheckin()
-  guestInterval = setInterval(() => {
-    fetchTodayCheckin()
-    fetchYesterdayCheckin()
-    fetchTomorrowCheckin()
-  }, 30000)
+  fetchAllGuestTabs()
+  guestInterval = setInterval(fetchAllGuestTabs, 30000)
   
   // 房間狀態 (每15秒)
   fetchRoomStatus()
@@ -564,7 +541,8 @@ function connectWebSocket() {
         const booking_id = payload.booking_id;
         
         // 更新所有列表中的對應訂單
-        const updateInList = (list) => {
+        GUEST_TABS_CONFIG.forEach(cfg => {
+          const list = guestTabs[cfg.offset.toString()].data;
           const item = list.find(g => g.pms_id === booking_id || g.booking_id === booking_id);
           if (item) {
             if (payload.confirmed_phone) item.contact_phone = payload.confirmed_phone;
@@ -574,11 +552,7 @@ function connectWebSocket() {
             if (payload.line_name) item.line_name = payload.line_name;
             console.log(`✅ 已同步訂單 ${booking_id} 的擴充資料`);
           }
-        };
-
-        updateInList(todayGuests.value);
-        updateInList(yesterdayGuests.value);
-        updateInList(tomorrowGuests.value);
+        });
       }
     } catch (e) {
       console.error('解析通知失敗:', e)
@@ -929,61 +903,35 @@ const statusIcons = {
               <div class="widget-handle"></div>
               <h3>🏨 入住資訊</h3>
               <div class="guest-tabs">
-                <button :class="{ active: activeGuestTab === 'today' }" @click="activeGuestTab = 'today'">
-                  今日 <span class="tab-count">({{ todayGuests.length }})</span>
-                </button>
-                <button :class="{ active: activeGuestTab === 'yesterday' }" @click="activeGuestTab = 'yesterday'">
-                  昨日 <span class="tab-count">({{ yesterdayGuests.length }})</span>
-                </button>
-                <button :class="{ active: activeGuestTab === 'tomorrow' }" @click="activeGuestTab = 'tomorrow'">
-                  明日 <span class="tab-count">({{ tomorrowGuests.length }})</span>
+                <button 
+                  v-for="cfg in GUEST_TABS_CONFIG" 
+                  :key="'tab-' + cfg.offset"
+                  :class="{ active: activeGuestOffset === cfg.offset }" 
+                  @click="activeGuestOffset = cfg.offset"
+                  class="guest-tab-btn"
+                >
+                  {{ getTabLabel(cfg) }} 
+                  <span class="tab-count">({{ guestTabs[cfg.offset.toString()]?.data.length || 0 }})</span>
                 </button>
               </div>
               <button class="collapse-btn" @click="toggleCollapse(6)">{{ widgets[6].collapsed ? '▼' : '▲' }}</button>
             </div>
             <div v-show="!widgets[6].collapsed" class="panel-body">
-              <!-- 今日入住 -->
-              <div v-show="activeGuestTab === 'today'">
-                <div v-if="guestsLoading" class="loading-text">載入中...</div>
-                <div v-else-if="todayGuests.length === 0" class="empty-text">今日無入住</div>
-                <div v-else class="guest-cards-list">
-                  <GuestCard 
-                    v-for="g in todayGuests" 
-                    :key="'today-' + g.booking_id" 
-                    :guest="g" 
-                    :isExpanded="isCardExpanded('today-' + g.booking_id)"
-                    @toggle="toggleCardExpand('today-' + g.booking_id)"
-                  />
+              <template v-for="cfg in GUEST_TABS_CONFIG" :key="'content-' + cfg.offset">
+                <div v-if="activeGuestOffset === cfg.offset">
+                  <div v-if="guestTabs[cfg.offset.toString()]?.loading" class="loading-text">載入中...</div>
+                  <div v-else-if="guestTabs[cfg.offset.toString()]?.data.length === 0" class="empty-text">{{ getTabLabel(cfg) }}無入住</div>
+                  <div v-else class="guest-cards-list">
+                    <GuestCard 
+                      v-for="g in guestTabs[cfg.offset.toString()].data" 
+                      :key="cfg.offset + '-' + g.booking_id" 
+                      :guest="g" 
+                      :isExpanded="isCardExpanded(cfg.offset + '-' + g.booking_id)"
+                      @toggle="toggleCardExpand(cfg.offset + '-' + g.booking_id)"
+                    />
+                  </div>
                 </div>
-              </div>
-              <!-- 昨日入住 -->
-              <div v-show="activeGuestTab === 'yesterday'">
-                <div v-if="yesterdayLoading" class="loading-text">載入中...</div>
-                <div v-else-if="yesterdayGuests.length === 0" class="empty-text">昨日無入住</div>
-                <div v-else class="guest-cards-list">
-                  <GuestCard 
-                    v-for="g in yesterdayGuests" 
-                    :key="'yesterday-' + g.booking_id" 
-                    :guest="g" 
-                    :isExpanded="isCardExpanded('yesterday-' + g.booking_id)"
-                    @toggle="toggleCardExpand('yesterday-' + g.booking_id)"
-                  />
-                </div>
-              </div>
-              <!-- 明日入住 -->
-              <div v-show="activeGuestTab === 'tomorrow'">
-                <div v-if="tomorrowLoading" class="loading-text">載入中...</div>
-                <div v-else-if="tomorrowGuests.length === 0" class="empty-text">明日無入住</div>
-                <div v-else class="guest-cards-list">
-                  <GuestCard 
-                    v-for="g in tomorrowGuests" 
-                    :key="'tomorrow-' + g.booking_id" 
-                    :guest="g" 
-                    :isExpanded="isCardExpanded('tomorrow-' + g.booking_id)"
-                    @toggle="toggleCardExpand('tomorrow-' + g.booking_id)"
-                  />
-                </div>
-              </div>
+              </template>
             </div>
           </div>
         </div>
