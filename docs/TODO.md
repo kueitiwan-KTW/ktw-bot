@@ -55,4 +55,35 @@
 
 ---
 
+### 【中優先】Bot 模組化重構
+
+**需求描述**：
+- `bot.py` 目前 1821 行，太肥
+- `same_day_booking.py` 目前 1550 行，太肥
+- 目標：單一檔案控制在 500-800 行
+
+**架構拆分**：
+```
+1. 一般閒聊 → handlers/chat_handler.py (新建)
+2. 訂房/查訂單 → helpers/booking_intent.py (統一意圖判斷)
+3. 旅管相關 → vip_service_handler.py (現有)
+4. 後續新增 → 可擴充模組
+```
+
+**執行步驟**：
+1. 建立 `helpers/intent_router.py` - 統一意圖路由
+2. 建立 `helpers/booking_intent.py` - 訂房/查訂單意圖判斷
+3. 抽離 `handlers/chat_handler.py` - 一般閒聊
+4. 精簡 `bot.py` 主路由
+5. 移除 `same_day_booking.py` 重複的 `ROOM_TYPE_MAP`
+
+**影響範圍**：
+- `LINEBOT/bot.py`
+- `LINEBOT/handlers/same_day_booking.py`
+- `LINEBOT/helpers/intent_detector.py`
+
+**提出日期**：2025-12-21
+
+---
+
 *最後更新：2025-12-21*
