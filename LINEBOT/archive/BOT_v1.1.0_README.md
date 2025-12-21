@@ -90,13 +90,13 @@ KTW Hotel LINE Bot 是一個智能旅館客服系統，整合了 LINE Messaging 
    
 2. **第二優先**：OTA ID 前綴
    - `RMAG` 開頭 → Agoda
-   - `RMPGP` 開頭 → Booking.com
+   - `RMPGP` 開頭 → 德安官網
 
 **範例**：
 ```
 訂單 RMPGP12345，備註：官網訂單
-舊版：Booking.com ❌
-新版：官網 ✅
+舊版判斷錯誤 → Booking.com ❌
+新版正確判斷 → 官網 ✅
 ```
 
 ---
