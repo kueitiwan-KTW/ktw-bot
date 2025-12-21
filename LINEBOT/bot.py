@@ -538,8 +538,13 @@ Your Knowledge Base (FAQ):
         
         try:
             print("🔷 Attempting PMS API query...")
-            # 使用增強後的組合查詢邏輯
-            pms_response = self.pms_client.get_booking_details(order_id, guest_name=guest_name, phone=phone)
+            # 使用增強後的組合查詢邏輯，傳入 user_id 以記錄日誌
+            pms_response = self.pms_client.get_booking_details(
+                order_id, 
+                guest_name=guest_name, 
+                phone=phone,
+                user_id=self.current_user_id  # 傳入用戶 ID 以記錄日誌
+            )
             
             if pms_response and pms_response.get('success'):
                 order_info = pms_response
@@ -551,9 +556,9 @@ Your Knowledge Base (FAQ):
             print(f"⚠️ PMS API failed: {e}")
         
         # 2. Fallback to Gmail if PMS fails
-        # 注意：Gmail 備援僅在有強力的 booking_id 時觸發（長度 > 10 或包含字母）
-        if not order_info and (len(order_id) > 10 or not order_id.isdigit()):
-            print("📧 Falling back to Gmail search...")
+        # 注意：Gmail 備援在 OTA 訂單號（>= 10 位數字或包含字母）時觸發
+        if not order_info and (len(order_id) >= 10 or not order_id.isdigit()):
+            print(f"📧 Falling back to Gmail search... (order_id={order_id}, len={len(order_id)})")
             gmail_info = self.gmail_helper.search_order(order_id)
             if gmail_info:
                 order_info = gmail_info

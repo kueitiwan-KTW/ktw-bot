@@ -4,9 +4,16 @@ PMS API Client
 """
 
 import os
+import time
 import requests
 from typing import Optional, Dict, Any
 from datetime import datetime
+
+# 引入 API Logger
+try:
+    from helpers.api_logger import get_api_logger
+except ImportError:
+    from .api_logger import get_api_logger
 
 
 class PMSClient:
@@ -17,10 +24,12 @@ class PMSClient:
         self.base_url = os.getenv('PMS_API_BASE_URL', 'http://192.168.8.3:3000/api')
         self.timeout = int(os.getenv('PMS_API_TIMEOUT', '5'))
         self.enabled = os.getenv('PMS_API_ENABLED', 'True').lower() == 'true'
+        self.api_logger = get_api_logger()
         
         print(f"🔷 PMS Client initialized: base_url={self.base_url}, timeout={self.timeout}s, enabled={self.enabled}")
     
-    def get_booking_details(self, booking_id: str, guest_name: Optional[str] = None, phone: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_booking_details(self, booking_id: str, guest_name: Optional[str] = None, 
+                            phone: Optional[str] = None, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         獲取訂單詳細資料 (支援組合式驗證)
         
@@ -28,29 +37,43 @@ class PMSClient:
             booking_id: 訂單編號
             guest_name: (選填) 訂房人姓名，用於交叉核對
             phone: (選填) 聯絡電話，用於交叉核對
+            user_id: (選填) LINE 用戶 ID，用於日誌記錄
             
         Returns:
             訂單資料字典，失敗或資料不匹配返回 None
         """
+        import re
+        start_time = time.time()
+        
+        # 記錄查詢開始
+        self.api_logger.log_query_start(user_id or "unknown", booking_id, guest_name, phone)
+        
         if not self.enabled:
             print("⚠️ PMS API is disabled")
+            self.api_logger.log_pms_error("DISABLED", booking_id, 0, "PMS API is disabled")
             return None
         
         try:
             # 清理訂單號
             clean_id = booking_id.strip()
-            import re
             clean_id = re.sub(r'^[A-Z]+', '', clean_id)
             
             url = f"{self.base_url}/bookings/{clean_id}"
             print(f"📡 PMS API Request: GET {url}")
+            self.api_logger.log_pms_request(url)
             
             response = requests.get(url, timeout=self.timeout)
+            elapsed = time.time() - start_time
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
                     order_data = data['data']
+                    pms_id = order_data.get('booking_id')
+                    ota_id = order_data.get('ota_booking_id')
+                    
+                    # 記錄成功回應
+                    self.api_logger.log_pms_response(200, elapsed, True, pms_id, ota_id)
                     
                     # 執行交叉核對 (如果提供了姓名或電話)
                     if guest_name or phone:
@@ -60,39 +83,55 @@ class PMSClient:
                         
                         if guest_name and guest_name not in pms_name:
                             print(f"❌ Privacy Check Failed: Name mismatch ('{guest_name}' not in '{pms_name}')")
+                            self.api_logger.log_pms_error("PRIVACY_NAME", booking_id, elapsed, 
+                                f"Name mismatch: '{guest_name}' not in '{pms_name}'")
                             is_match = False
                         
                         if phone:
-                            # 移除所有非數字進行比對
                             clean_input_phone = re.sub(r'\D', '', phone)
                             clean_pms_phone = re.sub(r'\D', '', pms_phone)
                             if clean_input_phone and clean_input_phone not in clean_pms_phone:
                                 print(f"❌ Privacy Check Failed: Phone mismatch ('{clean_input_phone}' not in '{clean_pms_phone}')")
+                                self.api_logger.log_pms_error("PRIVACY_PHONE", booking_id, elapsed,
+                                    f"Phone mismatch: '{clean_input_phone}' not in '{clean_pms_phone}'")
                                 is_match = False
                         
                         if not is_match:
-                            return None # 不匹配則視為沒查到，保護隱私
+                            return None
                             
-                    print(f"✅ PMS API Success: booking_id={order_data['booking_id']}")
+                    print(f"✅ PMS API Success: booking_id={pms_id}")
+                    self.api_logger.log_query_result(booking_id, "pms", True, pms_id)
                     return data
                 else:
                     print(f"⚠️ PMS API returned success=false")
+                    self.api_logger.log_pms_response(200, elapsed, False)
+                    self.api_logger.log_pms_error("API_FAIL", booking_id, elapsed, "API returned success=false")
                     return None
+                    
             elif response.status_code == 404:
                 print(f"📭 PMS API: Booking {clean_id} not found")
+                self.api_logger.log_pms_response(404, elapsed, False)
                 return None
             else:
                 print(f"⚠️ PMS API Error: HTTP {response.status_code}")
+                self.api_logger.log_pms_response(response.status_code, elapsed, False)
+                self.api_logger.log_pms_error("HTTP_ERROR", booking_id, elapsed, f"HTTP {response.status_code}")
                 return None
                 
         except requests.exceptions.Timeout:
+            elapsed = time.time() - start_time
             print(f"⏱️ PMS API Timeout after {self.timeout}s")
+            self.api_logger.log_pms_error("TIMEOUT", booking_id, elapsed, f"Request timeout after {self.timeout}s")
             return None
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as e:
+            elapsed = time.time() - start_time
             print(f"🔌 PMS API Connection Error (is server running?)")
+            self.api_logger.log_pms_error("CONNECTION", booking_id, elapsed, f"Connection error: {str(e)[:100]}")
             return None
         except Exception as e:
+            elapsed = time.time() - start_time
             print(f"❌ PMS API Unexpected Error: {e}")
+            self.api_logger.log_pms_error("UNEXPECTED", booking_id, elapsed, f"Unexpected: {str(e)[:100]}")
             return None
     
     def search_by_name(self, name: str) -> Optional[Dict[str, Any]]:

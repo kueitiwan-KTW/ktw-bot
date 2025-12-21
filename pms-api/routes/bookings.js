@@ -7,7 +7,53 @@ const router = express.Router();
 const db = require('../config/database');
 const { STATUS_MAP, getStatusName, getRoomTotal, getDepositPaid, getRoomDetails, getRoomNumbers, getEffectiveStatus, getCheckinBookings } = require('../helpers/bookingHelpers');
 
+/**
+ * GET /api/bookings/debug-order-time/:booking_id
+ * 調試用：查詢訂單建立時間 (INS_DAT)
+ */
+router.get('/debug-order-time/:booking_id', async (req, res) => {
+    try {
+        const { booking_id } = req.params;
+        const pool = db.getPool();
+        const connection = await pool.getConnection();
 
+        try {
+            // 用 IKEY 或 OTA 訂單號查詢
+            const result = await connection.execute(`
+                SELECT 
+                    TRIM(om.IKEY) as booking_id,
+                    TRIM(om.RVRESERVE_NOS) as ota_booking_id,
+                    TO_CHAR(om.INS_DAT, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+                    TO_CHAR(om.UPD_DAT, 'YYYY-MM-DD HH24:MI:SS') as updated_at
+                FROM GDWUUKT.ORDER_MN om
+                WHERE TRIM(om.IKEY) = :booking_id
+                   OR TRIM(om.RVRESERVE_NOS) LIKE '%' || :booking_id || '%'
+            `, { booking_id });
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ success: false, message: '找不到訂單' });
+            }
+
+            const row = result.rows[0];
+            res.json({
+                success: true,
+                data: {
+                    booking_id: row[0],
+                    ota_booking_id: row[1],
+                    created_at: row[2],
+                    updated_at: row[3]
+                }
+            });
+
+        } finally {
+            await connection.close();
+        }
+
+    } catch (err) {
+        console.error('查詢訂單時間失敗：', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 /**
  * GET /api/bookings/search
@@ -798,57 +844,39 @@ router.get('/:booking_id', async (req, res) => {
         const connection = await pool.getConnection();
 
         try {
-            // 查詢訂單主檔 - 三層查詢策略
-            // 1. 先用 IKEY 精確匹配
+            // 查詢訂單主檔 - 三層查詢策略（優先 OTA 訂單號）
+            // ⭐ 1. 優先用 OTA 訂單號 (RVRESERVE_NOS) 模糊匹配
+            //    客人通常提供 OTA 編號如 "1671721966"，需要匹配 "RMAG1671721966"
+            console.log(`🔍 查詢訂單: ${booking_id} (優先 OTA 模糊匹配)`);
             let orderResult = await connection.execute(
                 `SELECT 
-           TRIM(om.IKEY) as booking_id,
-           CASE 
-             WHEN LENGTH(TRIM(om.GALT_NAM)) > 0 THEN TRIM(om.GALT_NAM)
-             WHEN LENGTH(TRIM(om.GLAST_NAM)) > 0 OR LENGTH(TRIM(om.GFIRST_NAM)) > 0 
-               THEN TRIM(NVL(om.GLAST_NAM,'') || NVL(om.GFIRST_NAM,''))
-             ELSE om.CUST_NAM
-           END as guest_name,
-           om.CONTACT1_RMK as contact_phone,
-           TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
-           TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
-           om.DAYS as nights,
-           om.ORDER_STA as status_code,
-           om.ORDER_RMK as remarks,
-           om.ORDER_DEPOSIT as deposit_paid,
-           TRIM(om.RVRESERVE_NOS) as ota_booking_id
-         FROM GDWUUKT.ORDER_MN om
-         WHERE TRIM(om.IKEY) = :booking_id`,
+               TRIM(om.IKEY) as booking_id,
+               CASE 
+                 WHEN LENGTH(TRIM(om.GALT_NAM)) > 0 THEN TRIM(om.GALT_NAM)
+                 WHEN LENGTH(TRIM(om.GLAST_NAM)) > 0 OR LENGTH(TRIM(om.GFIRST_NAM)) > 0 
+                   THEN TRIM(NVL(om.GLAST_NAM,'') || NVL(om.GFIRST_NAM,''))
+                 ELSE om.CUST_NAM
+               END as guest_name,
+               om.CONTACT1_RMK as contact_phone,
+               TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
+               TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
+               om.DAYS as nights,
+               om.ORDER_STA as status_code,
+               om.ORDER_RMK as remarks,
+               om.ORDER_DEPOSIT as deposit_paid,
+               TRIM(om.RVRESERVE_NOS) as ota_booking_id
+             FROM GDWUUKT.ORDER_MN om
+             WHERE TRIM(om.RVRESERVE_NOS) LIKE '%' || :booking_id || '%'`,
                 { booking_id }
             );
 
-            // 2. 若失敗，用 RVRESERVE_NOS (OTA訂單號) 精確匹配
-            if (orderResult.rows.length === 0) {
-                orderResult = await connection.execute(
-                    `SELECT 
-               TRIM(om.IKEY) as booking_id,
-               CASE 
-                 WHEN LENGTH(TRIM(om.GALT_NAM)) > 0 THEN TRIM(om.GALT_NAM)
-                 WHEN LENGTH(TRIM(om.GLAST_NAM)) > 0 OR LENGTH(TRIM(om.GFIRST_NAM)) > 0 
-                   THEN TRIM(NVL(om.GLAST_NAM,'') || NVL(om.GFIRST_NAM,''))
-                 ELSE om.CUST_NAM
-               END as guest_name,
-               om.CONTACT1_RMK as contact_phone,
-               TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
-               TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
-               om.DAYS as nights,
-               om.ORDER_STA as status_code,
-               om.ORDER_RMK as remarks,
-               om.ORDER_DEPOSIT as deposit_paid,
-               TRIM(om.RVRESERVE_NOS) as ota_booking_id
-             FROM GDWUUKT.ORDER_MN om
-             WHERE TRIM(om.RVRESERVE_NOS) = :booking_id`,
-                    { booking_id }
-                );
+            if (orderResult.rows.length > 0) {
+                console.log(`✅ OTA 模糊匹配成功: ${orderResult.rows[0][9]}`);
             }
 
-            // 3. 若仍失敗，嘗試模糊匹配（支援只用後面數字查詢）
+            // 2. 若失敗，用 IKEY 精確匹配（PMS 內部訂單號）
             if (orderResult.rows.length === 0) {
+                console.log(`📋 嘗試 IKEY 精確匹配: ${booking_id}`);
                 orderResult = await connection.execute(
                     `SELECT 
                TRIM(om.IKEY) as booking_id,
@@ -867,8 +895,37 @@ router.get('/:booking_id', async (req, res) => {
                om.ORDER_DEPOSIT as deposit_paid,
                TRIM(om.RVRESERVE_NOS) as ota_booking_id
              FROM GDWUUKT.ORDER_MN om
-             WHERE TRIM(om.IKEY) LIKE '%' || :booking_id || '%'
-                OR TRIM(om.RVRESERVE_NOS) LIKE '%' || :booking_id || '%'`,
+             WHERE TRIM(om.IKEY) = :booking_id`,
+                    { booking_id }
+                );
+
+                if (orderResult.rows.length > 0) {
+                    console.log(`✅ IKEY 精確匹配成功: ${orderResult.rows[0][0]}`);
+                }
+            }
+
+            // 3. 若仍失敗，嘗試 IKEY 模糊匹配（容錯）
+            if (orderResult.rows.length === 0) {
+                console.log(`🔎 嘗試 IKEY 模糊匹配: ${booking_id}`);
+                orderResult = await connection.execute(
+                    `SELECT 
+               TRIM(om.IKEY) as booking_id,
+               CASE 
+                 WHEN LENGTH(TRIM(om.GALT_NAM)) > 0 THEN TRIM(om.GALT_NAM)
+                 WHEN LENGTH(TRIM(om.GLAST_NAM)) > 0 OR LENGTH(TRIM(om.GFIRST_NAM)) > 0 
+                   THEN TRIM(NVL(om.GLAST_NAM,'') || NVL(om.GFIRST_NAM,''))
+                 ELSE om.CUST_NAM
+               END as guest_name,
+               om.CONTACT1_RMK as contact_phone,
+               TO_CHAR(om.CI_DAT, 'YYYY-MM-DD') as check_in_date,
+               TO_CHAR(om.CO_DAT, 'YYYY-MM-DD') as check_out_date,
+               om.DAYS as nights,
+               om.ORDER_STA as status_code,
+               om.ORDER_RMK as remarks,
+               om.ORDER_DEPOSIT as deposit_paid,
+               TRIM(om.RVRESERVE_NOS) as ota_booking_id
+             FROM GDWUUKT.ORDER_MN om
+             WHERE TRIM(om.IKEY) LIKE '%' || :booking_id || '%'`,
                     { booking_id }
                 );
             }
