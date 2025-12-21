@@ -9,7 +9,7 @@ const OTA_PREFIX_MAP = {
     'RMBK': 'Booking.com',
     'RMEX': 'Expedia',
     'RMCPT': '攜程',
-    'RMPGP': '官網'  // 德安官網
+    'RMPGP': '官網'
 };
 
 /**

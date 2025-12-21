@@ -90,7 +90,7 @@ KTW Hotel LINE Bot 是一個智能旅館客服系統，整合了 LINE Messaging 
    
 2. **第二優先**：OTA ID 前綴
    - `RMAG` 開頭 → Agoda
-   - `RMPGP` 開頭 → 德安官網
+   - `RMPGP` 開頭 → 官網
 
 **範例**：
 ```

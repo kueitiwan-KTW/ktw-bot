@@ -147,7 +147,7 @@ GHIST_MN (客戶歷史表)
 | RMBK | Booking.com |
 | RMEX | Expedia |
 | RMCPT | 攜程 |
-| RMPGP | 德安官網 |
+| RMPGP | 官網 |
 | 無OTA編號 | 手KEY |
 
 ---
