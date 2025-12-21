@@ -127,6 +127,39 @@ Your Knowledge Base (FAQ):
 
 **核心精神**：寧可多問一句確認，也不要自作主張導致錯誤。這樣能提供更準確的服務。
 
+**QUESTION BUFFERING STRATEGY (問題緩存策略) ⭐:**
+當客人在「提供訂單編號」的同時也「問了問題」時，你必須遵守以下流程：
+
+**情境識別**：
+- 客人訊息包含：① 訂單編號 + ② 問題/詢問
+- 範例：「訂單編號RMPGP250305045，想請問帶兩歲小孩需要另外加錢嗎？」
+
+**正確處理流程（5 步驟）**：
+1. **記住問題但不回答**：內部記錄「小孩收費問題」待後續回覆
+2. **查詢訂單**：調用 check_order_status 工具
+3. **顯示訂單資訊**：完整顯示 formatted_display 內容
+4. **收集客人資料**：依序詢問電話確認、抵達時間、特殊需求
+5. **最後才回答問題**：在所有資料收集完畢後，才統一回答客人一開始的問題
+
+**嚴格禁止 ❌**：
+- 不要在「第 1 次回覆」就回答客人的問題
+- 不要說「先回答您的問題...」然後繼續問資料
+- 不要讓客人一得到答案就結束對話（失去收集資料的機會）
+
+**正確範例**：
+```
+客人：「RMPGP250305045，帶兩歲小孩需要加錢嗎？」
+
+Bot 第 1 次回覆：「📋 我幫您找到了這筆訂單：
+[訂單資訊...]
+系統顯示您的聯絡電話為 xxx，請問是否正確？」
+
+（收集電話確認、抵達時間、特殊需求...）
+
+Bot 完成收集後回覆：「✅ 已為您完成預訂確認！...
+💡 關於您詢問的兩歲小孩問題：不佔床的兒童不會另外收費唷！如需嬰兒床可提前預約。」
+```
+
 **CRITICAL INSTRUCTION FOR ORDER VERIFICATION:**
 1. **TRIGGER RULE** (with context awareness):
    - If the user's message contains a sequence of digits (5+ digits) that **looks like an Order ID**, you should check it.
@@ -435,38 +468,36 @@ Your Knowledge Base (FAQ):
                 HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE
             }
             
-            # Generation config for strict mode (state machine flows)
-            generation_config_strict = {
-                'temperature': 0.2,  # 嚴謹模式：狀態機流程、Function Calling
-                'top_p': 0.8,
-                'top_k': 20,
+            # Generation config for Gemini 3 (官方建議維持 temperature=1.0)
+            # 參考: https://ai.google.dev/gemini-api/docs/gemini-3
+            generation_config_pro = {
+                'temperature': 1.0,  # Gemini 3 官方建議值，低於 1.0 可能導致迴圈問題
             }
             
-            # Generation config for chat mode (casual conversation)
-            generation_config_chat = {
-                'temperature': 0.5,  # 聊天模式：一般對話、VIP 服務
-                'top_p': 0.9,
-                'top_k': 40,
+            # Generation config for Flash (快速回應用途)
+            generation_config_flash = {
+                'temperature': 1.0,  # Gemini 3 官方建議值
             }
             
-            # Main model for strict flows (order query, same-day booking, function calling)
+            # Main model: Gemini 3 Pro (訂單查詢、Function Calling、複雜推理)
+            # Pro 版適合「需要跨模態進階推理的複雜工作」
             self.model = genai.GenerativeModel(
-                model_name='gemini-3-flash-preview',
+                model_name='gemini-3-pro-preview',
                 tools=self.tools,
                 system_instruction=self.system_instruction,
                 safety_settings=safety_settings,
-                generation_config=generation_config_strict
+                generation_config=generation_config_pro
             )
             
-            # Chat model for casual conversation (idle state, general Q&A)
+            # Chat model: Gemini 3 Flash (一般對話、VIP 服務、快速回應)
             self.model_chat = genai.GenerativeModel(
                 model_name='gemini-3-flash-preview',
                 tools=self.tools,
                 system_instruction=self.system_instruction,
                 safety_settings=safety_settings,
-                generation_config=generation_config_chat
+                generation_config=generation_config_flash
             )
-            print("✅ HotelBot initialized (Strict: 0.2, Chat: 0.5)")
+            print("✅ HotelBot initialized (Pro: gemini-3-pro-preview, Flash: gemini-3-flash-preview)")
             
             # Vision model for OCR tasks (keep 2.0, already excellent)
             self.vision_model = genai.GenerativeModel(
