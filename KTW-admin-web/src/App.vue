@@ -1,4 +1,3 @@
-```
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, reactive } from 'vue'
 import { GridStack } from 'gridstack'

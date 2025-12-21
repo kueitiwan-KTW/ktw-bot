@@ -198,8 +198,8 @@ pm2 restart DT-Admin-Web
 
 ## 📝 版本資訊
 
-- **當前版本**: v1.1.2
-- **最後更新**: 2025-12-17
+- **當前版本**: v1.4.0
+- **最後更新**: 2025-12-21
 - **維護者**: KTW Hotel IT Team
 
 詳細變更記錄請參閱 [CHANGELOG.md](./CHANGELOG.md)

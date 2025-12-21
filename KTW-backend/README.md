@@ -52,7 +52,7 @@ pm2 start ecosystem.config.js --only DT-Backend
 ## 📝 版本資訊
 
 - **當前版本**: v1.2.0
-- **最後更新**: 2025-12-20
+- **最後更新**: 2025-12-21
 - **維護者**: KTW Hotel IT Team
 
 詳細變更記錄請參閱 [CHANGELOG.md](./CHANGELOG.md)

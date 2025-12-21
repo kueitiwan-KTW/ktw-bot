@@ -15,6 +15,11 @@ from helpers import GoogleServices, GmailHelper, WeatherHelper, PMSClient
 from helpers.bot_logger import get_bot_logger  # Bot 內部運作日誌
 from handlers import HandlerRouter, OrderQueryHandler, AIConversationHandler, SameDayBookingHandler, ConversationStateMachine
 from chat_logger import ChatLogger
+from helpers.order_helper import (
+    ROOM_TYPES, normalize_phone, clean_ota_id, 
+    detect_booking_source, get_breakfast_info, get_resume_message,
+    sync_order_details
+)
 
 class HotelBot:
     def __init__(self, knowledge_base_path, persona_path):
@@ -599,6 +604,21 @@ Your Knowledge Base (FAQ):
             
             if pending_data:
                 print(f"🔗 找到待匹配的暫存資料: {pending_data}")
+                
+                # ✨ 正式同步資料至 SQLite 與 JSON 日誌
+                sync_order_details(
+                    order_id=pms_id, # 正式同步時使用 PMS ID
+                    data={
+                        "guest_name": pending_data.get('guest_name'),
+                        "phone": pending_data.get('phone'),
+                        "arrival_time": pending_data.get('arrival_time'),
+                        "line_user_id": self.current_user_id,
+                        "line_display_name": pending_data.get('line_display_name') or getattr(self, 'current_display_name', None)
+                    },
+                    logger=self.logger,
+                    pms_client=self.pms_client
+                )
+                
                 # 標記為已匹配
                 pending_manager.mark_matched(self.current_user_id, pending_data['provided_order_id'])
                 # 將暫存資料加入返回結果
@@ -728,30 +748,16 @@ Your Knowledge Base (FAQ):
                 if deposit_paid and deposit_paid > 0:
                     deposit_text = f"\n                    已付訂金: NT${deposit_paid:,.0f}"
                 
-                # OTA 订单号（优先显示，如果没有则显示 PMS 订单号）
+                # OTA 訂單號 (套用清理邏輯)
                 ota_id = order_data.get('ota_booking_id', '')
+                display_ota = clean_ota_id(ota_id)
+                display_order_id = display_ota if display_ota else order_data['booking_id']
                 
-                # ✨ 去掉 OTA 前綴（RMAG, RMPGP, RM 等），只顯示純數字
-                import re
-                clean_ota_id = re.sub(r'^[A-Z]+', '', ota_id) if ota_id else ''
-                display_order_id = clean_ota_id if clean_ota_id else order_data['booking_id']
-                
-                # 订房来源（優先從備註判斷，其次才用 OTA ID）
-                booking_source = "未知"
-                remarks = order_data.get('remarks', '')
-                # 優先檢查 remarks 中的關鍵字（放寬匹配條件）
-                if '官網' in remarks or '網路訂房' in remarks or '線上訂購' in remarks:
-                    booking_source = "官網"
-                elif 'agoda' in remarks.lower():
-                    booking_source = "Agoda"
-                elif 'booking.com' in remarks.lower() or 'booking' in remarks.lower():
-                    booking_source = "Booking"
-                # 如果 remarks 沒有，才用 OTA ID 判斷
-                elif ota_id:
-                    if ota_id.startswith('RMAG'):
-                        booking_source = "Agoda"
-                    elif ota_id.startswith('RMPGP'):
-                        booking_source = "官網"  # RMPGP 是官網訂單前綴
+                # 訂房來源 (套用共用辨識邏輯)
+                booking_source = detect_booking_source(
+                    remarks=order_data.get('remarks', ''),
+                    ota_id=ota_id
+                )
                 
                 # 組合姓名：優先使用 Last Name + First Name
                 last_name = order_data.get('guest_last_name', '').strip()
@@ -781,15 +787,11 @@ Your Knowledge Base (FAQ):
                     # 构建房型信息（只显示中文名稱）
                     rooms_info = []
                     for room in order_data.get('rooms', []):
-                        # PMS API 返回大寫鍵名，需要處理大小寫
-                        room_code = room.get('ROOM_TYPE_CODE') or room.get('room_type_code', '')
-                        room_code = room_code.strip() if room_code else ''
+                        room_code = (room.get('ROOM_TYPE_CODE') or room.get('room_type_code') or '').strip()
                         
-                        # 優先使用房型代碼查詢中文名稱
-                        if room_code in self.room_types:
-                            room_name = self.room_types[room_code]['zh']
-                        else:
-                            room_name = room.get('ROOM_TYPE_NAME') or room.get('room_type_name') or room_code
+                        # 優先從 SSOT 獲取中文名稱
+                        room_meta = ROOM_TYPES.get(room_code, {})
+                        room_name = room_meta.get('zh', room.get('ROOM_TYPE_NAME') or room.get('room_type_name') or room_code)
                         
                         room_count = room.get('ROOM_COUNT') or room.get('room_count', 1)
                         room_text = f"{room_name} x{room_count}"
@@ -802,47 +804,24 @@ Your Knowledge Base (FAQ):
                         room_match = re.search(r'產品名稱[：:]\s*[^/]*?([A-Z]{2,3})(?:\s|/|$)', remarks)
                         if room_match:
                             room_code = room_match.group(1).strip()
-                            if room_code in self.room_types:
-                                room_name = self.room_types[room_code]['zh']
+                            if room_code in ROOM_TYPES:
+                                room_name = ROOM_TYPES[room_code]['zh']
                                 rooms_info.append(f"{room_name} x1")
                     
                     rooms_text = '\n                    '.join(rooms_info) if rooms_info else '無'
                     
-                    # 早餐資訊（從房價代號或備註判斷）
-                    breakfast = "含早餐"  # 預設有早餐
-                    
-                    # 檢查備註中的產品名稱
-                    if '不含早' in remarks or '無早' in remarks:
-                        breakfast = "不含早餐"
-                    
-                    # 也檢查房型名稱
-                    for room in order_data.get('rooms', []):
-                        room_type_name = room.get('room_type_name')
-                        if room_type_name and '不含早' in room_type_name:
-                            breakfast = "不含早餐"
-                            break
+                    # 早餐資訊 (套用共用邏輯)
+                    breakfast = get_breakfast_info(
+                        remarks=order_data.get('remarks', ''),
+                        rooms=order_data.get('rooms', [])
+                    )
                     
                     # 組合顯示訊息
                     # 只顯示 OTA 編號 (去掉前綴)，如果沒有則回退到 booking_id
                     display_id = clean_ota_id if clean_ota_id else order_data.get('booking_id', '未知')
                     
-                    # 電話格式化：移除國際電話前綴並提取台灣手機號碼
-                    raw_phone = order_data.get('contact_phone', '') or ''
-                    import re
-                    
-                    # ✨ 優化電話提取邏輯：
-                    # 1. 先找 09 開頭的手機號碼 (10碼)
-                    phone_match = re.search(r'(09\d{8})', raw_phone)
-                    if phone_match:
-                        formatted_phone = phone_match.group(1)
-                    else:
-                        # 2. 提取所有數字，取最後 9 碼加上 0
-                        # 處理 886886933912773 → 0933912773
-                        digits = re.sub(r'\D', '', raw_phone)
-                        if len(digits) >= 9:
-                            formatted_phone = '0' + digits[-9:]
-                        else:
-                            formatted_phone = raw_phone  # 保持原樣
+                    # 電話格式化 (套用共用邏輯)
+                    formatted_phone = normalize_phone(order_data.get('contact_phone', ''))
                     
                     clean_body = f"""
                 訂單來源: {booking_source}
@@ -1560,8 +1539,9 @@ STEP 2: ONLY AFTER showing all above details, then add weather and contact.
         return IntentDetector.has_order_number(message)
 
     def generate_response(self, user_question, user_id="default_user", display_name=None):
-        # 設定當前用戶 ID，供工具函數使用
+        # 設定當前用戶 ID 與名稱，供工具函數使用
         self.current_user_id = user_id
+        self.current_display_name = display_name
         
         # 記錄收到訊息 (Bot 內部 LOG)
         self.bot_logger.log_receive(user_id, "text", user_question)

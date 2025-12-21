@@ -4,6 +4,48 @@
 
 ---
 
+## [1.9.4] - 2025-12-21
+
+### ✨ 整合與故障排除
+
+#### 1. Admin Web 故障排除 (Critical)
+- **檔案**: `KTW-admin-web/src/App.vue` (L1)
+- **問題**: 第一行意外包含 Markdown 語法（三個反引號），導致 Vite 編譯失敗。
+- **修復**: 移除非法語法並重啟 PM2 服務。
+- **影響**: 恢復 Admin Dashboard 的正常訪問。
+
+#### 2. 正式同步暫存資料
+- **檔案**: `LINEBOT/bot.py` (L604-620)
+- **修改**: 當 `bot.py` 匹配到暫存客人資料時，調用 `sync_order_details` 正式將資訊同步至 SQLite 資料庫。
+- **目的**: 確保所有管道收集的資訊（包含暫存匹配）都能在 Admin Dashboard 顯示。
+
+## [1.9.3] - 2025-12-21
+
+### 🏗️ 結構重構：訂單處理模塊化 (Single Source of Truth)
+
+#### 1. 建立 Order Helper 模組
+- **新增檔案**: `LINEBOT/helpers/order_helper.py` [NEW]
+- **功能**: 
+  - 提取共用的電話正規化 (`normalize_phone`)。
+  - 提取 OTA 編號清理 (`clean_ota_id`)。
+  - 提取來源辨識 (`detect_booking_source`) 與早餐判斷 (`get_breakfast_info`)。
+  - 中央化 `sync_order_details`：統一將資訊同步至 `guest_orders.json` 與 SQLite。
+  - 中央化 `get_resume_message`：統一中斷恢復提示語。
+
+#### 2. Handler 與 Bot 瘦身
+- **檔案**: `LINEBOT/handlers/order_query_handler.py` (L100-650)
+- **檔案**: `LINEBOT/bot.py` (L730-850)
+- **修改**: 移除重複的電話、OTA 格式化與顯示邏輯，全面導入 `order_helper`。
+
+## [1.9.2] - 2025-12-21
+
+### ✨ 新功能：訂單未找到時暫存客人資料 (Interruption Recovery Support)
+- **新增檔案**: `LINEBOT/helpers/pending_guest.py` [NEW]
+- **功能**: 
+  - 當客人查詢不到訂單時，暫存其提供的姓名、電話、抵達時間。
+  - 當後續成功查到訂單時，自動匹配暫存資料並提示恢復流程。
+  - 支援 7 天過期自動清理。
+
 ## [1.9.1] - 2025-12-21
 
 ### 🐛 Bug 修復：OTA 訂單查詢優先與 LOG 機制

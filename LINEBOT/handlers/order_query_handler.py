@@ -5,9 +5,13 @@
 
 import re
 from datetime import datetime
-from typing import Optional, Dict, Any
-
+from typing import Optional, Dict, Any, List
 from .base_handler import BaseHandler
+from helpers.order_helper import (
+    ROOM_TYPES, normalize_phone, clean_ota_id, 
+    detect_booking_source, get_breakfast_info, get_resume_message,
+    sync_order_details
+)
 
 
 class OrderQueryHandler(BaseHandler):
@@ -40,23 +44,8 @@ class OrderQueryHandler(BaseHandler):
         self.logger = logger
         self.state_machine = state_machine  # 新增：注入狀態機
         
-        # 房型對照表
-        self.room_types = {
-            'SD': '標準雙人房',
-            'ST': '標準三人房',
-            'SQ': '標準四人房',
-            'CD': '經典雙人房',
-            'CQ': '經典四人房',
-            'ED': '行政雙人房',
-            'DD': '豪華雙人房',
-            'WD': '海景雙人房',
-            'WQ': '海景四人房',
-            'FM': '親子家庭房',
-            'VD': 'VIP 雙人房',
-            'VQ': 'VIP 四人房',
-            'AD': '無障礙雙人房',
-            'AQ': '無障礙四人房',
-        }
+        # 房型對照表 (已遷移至 order_helper.ROOM_TYPES)
+        self.room_types = ROOM_TYPES 
     
     def is_active(self, user_id: str) -> bool:
         """檢查用戶是否在訂單查詢流程中"""
@@ -106,37 +95,8 @@ class OrderQueryHandler(BaseHandler):
         return None
 
     def _normalize_phone(self, phone: str) -> str:
-        """
-        標準化電話號碼
-        - 移除國際電話前綴 886（包含多次重複）
-        - 找到並提取台灣手機格式 09xxxxxxxx
-        """
-        if not phone:
-            return '未提供'
-        
-        # 移除空白、連字符、加號
-        clean = phone.replace(' ', '').replace('-', '').replace('+', '')
-        
-        # 策略 1：尋找 09 開頭的 10 位數字
-        import re
-        match = re.search(r'(09\d{8})', clean)
-        if match:
-            return match.group(1)  # 直接返回找到的台灣手機號碼
-        
-        # 策略 2：持續移除 886 前綴直到不再以 886 開頭
-        while clean.startswith('886'):
-            clean = clean[3:]
-        
-        # 如果移除後以 0 開頭且長度正確，直接返回
-        if clean.startswith('0') and len(clean) >= 10:
-            return clean[:10]
-        
-        # 如果以 9 開頭（缺少 0），補上 0
-        if clean.startswith('9') and len(clean) >= 9:
-            return '0' + clean[:9]
-        
-        # 其他情況，返回清理後的結果
-        return clean if clean else '未提供'
+        """標準化電話號碼 (移至 order_helper)"""
+        return normalize_phone(phone)
 
     def _is_booking_intent(self, message: str) -> bool:
         """偵測加訂意圖"""
@@ -144,14 +104,14 @@ class OrderQueryHandler(BaseHandler):
         return any(kw in message for kw in keywords)
     
     def _extract_order_number(self, message: str) -> Optional[str]:
-        """從訊息中提取訂單編號"""
-        # 清理並提取數字
+        """從訊息中提取訂單編號 (已套用 OTA 清理)"""
+        # 1. 清理並提取數字
         clean_message = message.replace('-', '').replace(' ', '')
         
-        # 移除可能的前綴 (RMAG, RMPGP 等)
-        clean_message = re.sub(r'^[A-Z]+', '', clean_message)
+        # 2. 移除可能的前綴 (套用共用輔助方法)
+        clean_message = clean_ota_id(clean_message)
         
-        # 找 5 位數以上的數字 (移除 \b 以便在中文環境中更好匹配)
+        # 3. 找 5 位數以上的數字
         match = re.search(r'(\d{5,})', clean_message)
         if match:
             return match.group(1)
@@ -208,7 +168,10 @@ class OrderQueryHandler(BaseHandler):
                 for room in rooms:
                     room_code = (room.get('room_type_code') or room.get('ROOM_TYPE_CODE') or '').strip()
                     room_count = room.get('room_count') or room.get('ROOM_COUNT') or 1
-                    room_name_zh = self.room_types.get(room_code, room_code)
+                    
+                    # 獲取中文名稱 (從 SSOT 常數獲取)
+                    room_meta = self.room_types.get(room_code, {})
+                    room_name_zh = room_meta.get('zh', room_code)
                     
                     # 累加相同房型的數量
                     if room_name_zh in room_count_dict:
@@ -295,30 +258,18 @@ class OrderQueryHandler(BaseHandler):
         # 正常訂單處理
         lines = []
         
-        # OTA 訂單號（優先顯示）
+        # OTA 訂單號 (套用清理邏輯)
         ota_id = order_data.get('ota_booking_id', '')
         pms_id = order_data.get('order_id', '未知')
-        display_id = ota_id if ota_id else pms_id
         
-        # 訂房來源（從 OTA ID 前綴判斷）
-        booking_source = "未知"
-        remarks = order_data.get('remarks', '')
+        display_ota = clean_ota_id(ota_id)
+        display_id = display_ota if display_ota else pms_id
         
-        # 優先檢查 remarks 中的關鍵字
-        if '官網' in remarks or '網路訂房' in remarks or '線上訂購' in remarks:
-            booking_source = "官網"
-        elif 'agoda' in remarks.lower():
-            booking_source = "Agoda"
-        elif 'booking.com' in remarks.lower() or 'booking' in remarks.lower():
-            booking_source = "Booking"
-        # 如果 remarks 沒有，才用 OTA ID 判斷
-        elif ota_id:
-            if ota_id.startswith('RMAG'):
-                booking_source = "Agoda"
-            elif ota_id.startswith('RMPGP'):
-                booking_source = "官網"
-            elif ota_id.startswith('RMBK'):
-                booking_source = "Booking.com"
+        # 訂房來源 (套用共用辨識邏輯)
+        booking_source = detect_booking_source(
+            remarks=order_data.get('remarks', ''),
+            ota_id=ota_id
+        )
         
         lines.append(f"訂單來源: {booking_source}")
         lines.append(f"預約編號: {display_id}")
@@ -492,14 +443,16 @@ class OrderQueryHandler(BaseHandler):
 
 感謝您的配合，我們期待為您提供舒適的入住體驗。"""
 
-        # 這裡處理延遲跳轉引導
+        # 處理延遲跳轉引導 (套用共用訊息)
         pending_intent = self.state_machine.get_pending_intent(user_id)
-        if pending_intent == 'same_day_booking':
+        if pending_intent:
+            resume_msg = get_resume_message(pending_intent)
             # 執行跳轉
             next_state = self.state_machine.execute_pending_intent(user_id)
             if next_state:
                 self.state_machine.transition(user_id, next_state)
-                response += "\n\n━━━━━━━━━━━━━━━\n🔔 您剛剛提到的「加訂需求」，現在立刻為您處理！\n\n請問您今天想再加訂什麼房型呢？"
+                if resume_msg:
+                    response += f"\n\n{resume_msg}"
         
         # 清除 session（但保留訂單資訊供後續使用）
         self.clear_session(user_id)
@@ -552,48 +505,33 @@ class OrderQueryHandler(BaseHandler):
                 print(f"❌ 儲存失敗: {e}")
     
     def _save_to_guest_orders(self, user_id: str, session: Dict):
-        """儲存到 guest_orders.json"""
-        if not self.logger:
-            return
-        
-        order_data = session.get('order_data', {})
+        """儲存到客訴資料庫 (JSON) 與 SQLite (套用 SSOT 函數)"""
         order_id = session.get('order_id')
-        
         if not order_id:
             return
+            
+        # 準備資料
+        order_data = session.get('order_data', {})
+        sync_data = {
+            'guest_name': order_data.get('guest_name'),
+            'check_in': order_data.get('check_in'),
+            'check_out': order_data.get('check_out'),
+            'room_type': order_data.get('room_type'),
+            'booking_source': order_data.get('booking_source'),
+            'phone': session.get('phone'),
+            'arrival_time': session.get('arrival_time'),
+            'special_requests': session.get('special_requests', []),
+            'line_user_id': user_id,
+            'display_name': session.get('display_name')
+        }
         
-        try:
-            # 完整的訂單資訊
-            full_order = {
-                'order_id': order_id,
-                'guest_name': order_data.get('guest_name'),
-                'check_in': order_data.get('check_in'),
-                'check_out': order_data.get('check_out'),
-                'room_type': order_data.get('room_type'),
-                'booking_source': order_data.get('booking_source'),
-                'phone': session.get('phone'),
-                'arrival_time': session.get('arrival_time'),
-                'special_requests': session.get('special_requests', []),
-                'line_user_id': user_id,
-                'line_display_name': session.get('display_name'),
-                'updated_at': datetime.now().isoformat()
-            }
-            
-            self.logger.save_order(full_order)
-            print(f"✅ 已儲存訂單 {order_id} 到 guest_orders.json, display_name={session.get('display_name')}")
-            
-            # 同步到後端 SQLite 擴充資料庫
-            if self.pms_client:
-                sync_data = {
-                    'confirmed_phone': session.get('phone'),
-                    'arrival_time': session.get('arrival_time'),
-                    'ai_extracted_requests': "; ".join(session.get('special_requests', [])) if session.get('special_requests') else None,
-                    'line_name': session.get('display_name')
-                }
-                self.pms_client.update_supplement(order_id, sync_data)
-                
-        except Exception as e:
-            print(f"❌ 儲存或同步訂單失敗: {e}")
+        # 使用統一 SSOT 函數同步
+        sync_order_details(
+            order_id=order_id,
+            data=sync_data,
+            logger=self.logger,
+            pms_client=self.pms_client
+        )
     
     # ============================================
     # 輔助方法 - 從郵件提取資訊
@@ -633,26 +571,5 @@ class OrderQueryHandler(BaseHandler):
         return '未知'
     
     def _detect_booking_source(self, subject: str, body: str) -> str:
-        """偵測訂房來源"""
-        text = (subject + body).lower()
-        
-        if 'agoda' in text:
-            return 'Agoda'
-        elif 'booking.com' in text:
-            return 'Booking'
-        elif 'expedia' in text:
-            return 'Expedia'
-        elif 'hotels.com' in text:
-            return 'Hotels.com'
-        elif 'trip.com' in text or 'ctrip' in text:
-            return 'Trip.com'
-        elif '官網' in text:
-            return '官網'
-        
-        # 從訂單編號前綴判斷
-        if 'rmag' in text:
-            return 'Agoda'
-        elif 'rmpgp' in text:
-            return 'Booking'
-        
-        return '其他'
+        """偵測訂房來源 (套用共用邏輯)"""
+        return detect_booking_source(subject=subject, remarks=body)

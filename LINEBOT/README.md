@@ -62,6 +62,9 @@ LINEBOT/
 ├── weather_helper.py            ← 天氣查詢
 ├── chat_logger.py               ← 對話記錄
 ├── google_services.py           ← Google API 服務
+├── helpers/
+│   ├── order_helper.py          ← 訂單輔助模組 (SSOT) [NEW]
+│   └── pending_guest.py         ← 暫存客人管理器 [NEW]
 ├── line_bot_guide.md            ← LINE Bot 使用指南
 └── same_day_booking_guide.md    ← 當日預訂指南
 ```
@@ -219,7 +222,7 @@ pm2 restart Line-Bot-Py
 
 ## 📝 版本資訊
 
-- **當前版本**: v1.9.0
+- **當前版本**: v1.9.4
 - **最後更新**: 2025-12-21
 - **維護者**: KTW Hotel IT Team
 
