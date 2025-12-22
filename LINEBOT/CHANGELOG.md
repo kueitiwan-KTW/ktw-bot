@@ -4,6 +4,55 @@
 
 ---
 
+## [1.9.9] - 2025-12-22
+
+### 🔧 Bot 模組化重構
+
+> **目標**：將 `bot.py` 從 1821 行減至 817 行（-55%），提升可維護性
+
+#### Phase 1：抽離 System Prompt
+
+**新增檔案**：
+- `prompts/__init__.py` (7 行)
+- `prompts/system_prompt.py` (386 行)
+
+**修改**：`bot.py` L91-458
+- 365 行 System Prompt 移至獨立模組
+- 改用 `get_system_prompt(persona, kb_str)` 載入
+
+#### Phase 2：整合 check_order_status
+
+**修改**：`handlers/order_query_handler.py`
+- 新增 `query_for_ai()` (L649-728)：AI Function Calling 入口
+- 新增 `_check_privacy()` (L730-745)：隱私攔截
+- 新增 `_match_pending_data()` (L753-808)：暫存匹配
+
+**修改**：`bot.py` L188-710
+- 520 行完整邏輯 → 20 行 Wrapper
+- 委派給 `order_query_handler.query_for_ai()`
+
+#### Phase 3：整合 create_same_day_booking
+
+**修改**：`handlers/same_day_booking.py`
+- 新增 `create_booking_for_ai()` (L1557-1658)：AI 訂房入口
+- 新增 `_parse_rooms_for_ai()` (L1660-1699)：房型解析
+- 新增 `_submit_booking_to_pms()` (L1701-1724)：PMS 提交
+
+**修改**：`bot.py` L318-483
+- 165 行完整邏輯 → 25 行 Wrapper
+- 委派給 `same_day_handler.create_booking_for_ai()`
+
+#### 📊 行數統計
+
+| 檔案 | 重構前 | 重構後 | 變化 |
+|:-----|:------:|:------:|:----:|
+| bot.py | 1821 | 817 | **-55%** |
+| prompts/ | 0 | 393 | 新增 |
+| order_query_handler.py | 646 | 808 | +162 |
+| same_day_booking.py | 1554 | 1724 | +170 |
+
+---
+
 ## [1.9.8] - 2025-12-22
 
 ### ✨ 訂單查詢系統優化 Phase 1

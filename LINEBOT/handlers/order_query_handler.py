@@ -322,6 +322,7 @@ class OrderQueryHandler(BaseHandler):
         lines.append(f"房型: {room_type}")
         
         # 早餐（從 remarks 判斷）
+        remarks = order_data.get('remarks', '') or ''
         breakfast = "含早餐"
         if '不含早' in remarks or '無早' in remarks:
             breakfast = "不含早餐"
@@ -643,3 +644,182 @@ class OrderQueryHandler(BaseHandler):
     def _detect_booking_source(self, subject: str, body: str) -> str:
         """偵測訂房來源 (套用共用邏輯)"""
         return detect_booking_source(subject=subject, remarks=body)
+    
+    # ============================================
+    # AI Function Calling 專用方法 (Phase 2 新增)
+    # ============================================
+    
+    def query_for_ai(
+        self, 
+        user_id: str,
+        order_id: str, 
+        guest_name: str = "",
+        phone: str = "",
+        user_confirmed: bool = False,
+        display_name: str = None
+    ) -> Dict[str, Any]:
+        """
+        供 AI Function Calling 調用的訂單查詢入口
+        從 bot.py::check_order_status 遷移而來
+        
+        Args:
+            user_id: LINE 用戶 ID
+            order_id: 訂單編號
+            guest_name: 客人姓名（可選）
+            phone: 電話號碼（可選）
+            user_confirmed: 是否已確認訂單
+            display_name: LINE 顯示名稱
+        
+        Returns:
+            Dict: 符合 AI 工具規格的回傳格式
+            - status: "found", "not_found", "privacy_blocked", "confirmation_needed"
+            - formatted_display: 格式化的訂單文字
+            - order_data: 訂單原始資料
+        """
+        print(f"🔧 Handler: query_for_ai(order_id={order_id}, confirmed={user_confirmed})")
+        
+        # 清理輸入
+        order_id = order_id.strip()
+        
+        # 1️⃣ 隱私攔截
+        privacy_result = self._check_privacy(order_id)
+        if privacy_result:
+            return privacy_result
+        
+        # 2️⃣ 查詢訂單（PMS 優先，Gmail 備援）
+        order_data = self._query_pms(order_id)
+        data_source = 'pms' if order_data else None
+        
+        if not order_data and (len(order_id) >= 10 or not order_id.isdigit()):
+            print(f"📧 Falling back to Gmail search...")
+            order_data = self._query_gmail(order_id)
+            data_source = 'gmail' if order_data else None
+        
+        # 3️⃣ 找不到訂單
+        if not order_data:
+            self._handle_not_found_for_ai(user_id, order_id, guest_name, phone)
+            return {"status": "not_found", "order_id": order_id}
+        
+        # 4️⃣ 處理暫存資料匹配
+        pending_matched = self._match_pending_data(user_id, order_data, display_name)
+        
+        # 5️⃣ 確定顯示用的訂單 ID
+        pms_id = str(order_data.get('order_id', order_id))
+        ota_id = order_data.get('ota_booking_id', '')
+        found_id = ota_id if ota_id and (order_id in ota_id or ota_id in order_id) else pms_id
+        
+        # 6️⃣ 需要確認
+        if not user_confirmed:
+            result = {
+                "status": "confirmation_needed",
+                "found_order_id": found_id,
+                "message": f"找到訂單 {found_id}，請確認是否正確。"
+            }
+            if pending_matched:
+                result['pending_matched'] = pending_matched
+            return result
+        
+        # 7️⃣ 已確認，回傳完整資訊
+        formatted = self._format_order_details(order_data)
+        
+        # 同步客人資料到 Backend（LINE 姓名、user_id 關聯）
+        try:
+            sync_order_details(
+                order_id=pms_id,
+                data={
+                    "line_user_id": user_id,
+                    "line_display_name": display_name
+                },
+                logger=self.logger,
+                pms_client=self.pms_client,
+                ota_id=ota_id
+            )
+            print(f"✅ [Sync] 用戶 {user_id} 關聯至訂單 {pms_id}")
+        except Exception as e:
+            print(f"⚠️ [Sync] 同步失敗: {e}")
+        
+        # 記錄用戶訂單關聯
+        if self.logger:
+            self.logger.link_order_to_user(found_id, user_id)
+        
+        return {
+            "status": "found",
+            "order_id": found_id,
+            "formatted_display": formatted,
+            "order_data": order_data,
+            "data_source": data_source
+        }
+    
+    def _check_privacy(self, order_id: str) -> Optional[Dict]:
+        """
+        隱私攔截檢查
+        攔截日期格式、過短編號等不合法輸入
+        """
+        # 攔截日期格式
+        if re.search(r'\d{1,2}/\d{1,2}', order_id) or re.search(r'\d{4}-\d{2}-\d{2}', order_id):
+            print(f"🚫 Privacy Block: Date as ID: {order_id}")
+            return {"status": "privacy_blocked", "message": "請提供訂單編號而非日期。"}
+        
+        # 攔截過短編號
+        clean_numeric = re.sub(r'\D', '', order_id)
+        if not clean_numeric or len(clean_numeric) < 5:
+            print(f"🚫 Privacy Block: Vague ID: {order_id}")
+            return {"status": "privacy_blocked", "message": "訂單編號過短或格式不正確。"}
+        
+        return None
+    
+    def _handle_not_found_for_ai(self, user_id: str, order_id: str, guest_name: str, phone: str):
+        """處理找不到訂單的情況（供 AI 調用）"""
+        try:
+            from helpers.pending_guest import get_pending_guest_manager
+            pending_manager = get_pending_guest_manager()
+            pending_manager.save_pending(
+                user_id=user_id,
+                order_id=order_id,
+                guest_name=guest_name,
+                phone=phone
+            )
+        except Exception as e:
+            print(f"⚠️ 暫存失敗: {e}")
+    
+    def _match_pending_data(self, user_id: str, order_data: Dict, display_name: str = None) -> Optional[Dict]:
+        """匹配暫存資料並同步"""
+        try:
+            from helpers.pending_guest import get_pending_guest_manager
+            pending_manager = get_pending_guest_manager()
+            
+            ota_id = order_data.get('ota_booking_id', '')
+            pms_id = str(order_data.get('order_id', ''))
+            
+            pending_data = pending_manager.find_pending(user_id, ota_id or pms_id)
+            
+            if pending_data:
+                print(f"🔗 找到暫存資料: {pending_data}")
+                
+                # 同步資料
+                sync_order_details(
+                    order_id=pms_id,
+                    data={
+                        "guest_name": pending_data.get('guest_name'),
+                        "phone": pending_data.get('phone'),
+                        "arrival_time": pending_data.get('arrival_time'),
+                        "line_user_id": user_id,
+                        "line_display_name": pending_data.get('line_display_name') or display_name
+                    },
+                    logger=self.logger,
+                    pms_client=self.pms_client,
+                    ota_id=ota_id
+                )
+                
+                pending_manager.mark_matched(user_id, pending_data['provided_order_id'])
+                
+                return {
+                    "phone": pending_data.get('phone', ''),
+                    "arrival_time": pending_data.get('arrival_time', ''),
+                    "special_requests": pending_data.get('special_requests', ''),
+                    "note": f"已自動帶入您之前提供的資料"
+                }
+        except Exception as e:
+            print(f"⚠️ 暫存匹配失敗: {e}")
+        
+        return None

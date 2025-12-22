@@ -1551,3 +1551,179 @@ class SameDayBookingHandler:
 ━━━━━━━━━━━━━━━
 
 如有需要隨時歡迎再次預訂！"""
+    
+    # ============================================
+    # AI Function Calling 專用方法 (Phase 3 新增)
+    # ============================================
+    
+    def create_booking_for_ai(
+        self,
+        user_id: str,
+        rooms: str,
+        guest_name: str,
+        phone: str,
+        arrival_time: str,
+        bed_type: str = None,
+        special_requests: str = None,
+        display_name: str = None
+    ) -> Dict[str, Any]:
+        """
+        供 AI Function Calling 調用的當日預訂入口
+        從 bot.py::create_same_day_booking 遷移而來
+        
+        Args:
+            user_id: LINE 用戶 ID
+            rooms: 房型和數量（如「2間雙人房」或「標準雙人房 x 2, 標準四人房 x 1」）
+            guest_name: 客人姓名
+            phone: 聯絡電話（台灣手機 09xxxxxxxx）
+            arrival_time: 預計抵達時間
+            bed_type: 床型偏好（可選）
+            special_requests: 特殊需求（可選）
+            display_name: LINE 顯示名稱
+        
+        Returns:
+            Dict: 訂房結果
+        """
+        import re
+        
+        print(f"🔧 Handler: create_booking_for_ai(rooms={rooms}, name={guest_name})")
+        
+        # 1️⃣ 驗證電話格式
+        phone_clean = re.sub(r'[-\s]', '', phone)
+        if not re.match(r'^09\d{8}$', phone_clean):
+            return {
+                "success": False,
+                "error": "電話號碼格式錯誤",
+                "message": "請提供有效的台灣手機號碼（09 開頭 10 位數）。"
+            }
+        
+        # 2️⃣ 解析房型
+        parsed_rooms = self._parse_rooms_for_ai(rooms)
+        if not parsed_rooms:
+            return {
+                "success": False,
+                "error": "無法解析房型",
+                "message": f"無法解析「{rooms}」。請使用格式如「2間雙人房」或「標準雙人房 x 2」。"
+            }
+        
+        # 3️⃣ 檢查時間
+        if not self.is_within_booking_hours():
+            return {
+                "success": False,
+                "error": "已超過預訂時間",
+                "message": "抱歉，當日預訂服務僅開放至晚上 10 點。"
+            }
+        
+        # 4️⃣ 記錄訂單
+        booking_data = {
+            "guest_name": guest_name,
+            "phone": phone_clean,
+            "arrival_time": arrival_time,
+            "rooms": parsed_rooms,
+            "bed_type": bed_type,
+            "special_requests": special_requests,
+            "line_user_id": user_id,
+            "line_display_name": display_name,
+            "booking_time": datetime.now().isoformat()
+        }
+        
+        # 調用 PMS API
+        result = self._submit_booking_to_pms(booking_data)
+        
+        if result.get('success'):
+            # 格式化成功訊息
+            room_summary = ", ".join([f"{r['name']} x{r['count']}" for r in parsed_rooms])
+            total_price = sum(r.get('price', 0) * r['count'] for r in parsed_rooms)
+            
+            return {
+                "success": True,
+                "message": f"✅ 預訂成功！",
+                "booking_summary": {
+                    "guest_name": guest_name,
+                    "phone": phone_clean,
+                    "rooms": room_summary,
+                    "arrival_time": arrival_time,
+                    "total_price": total_price
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get('error', '系統錯誤'),
+                "message": result.get('message', '預訂失敗，請稍後再試。')
+            }
+    
+    def _parse_rooms_for_ai(self, rooms: str) -> list:
+        """解析 AI 傳入的房型字串"""
+        import re
+        
+        result = []
+        
+        # 房型對照表
+        room_mapping = {
+            '雙人': {'code': 'SD', 'name': '標準雙人房', 'price': 2280},
+            '三人': {'code': 'ST', 'name': '標準三人房', 'price': 2880},
+            '四人': {'code': 'SQ', 'name': '標準四人房', 'price': 3680},
+            '標準雙人': {'code': 'SD', 'name': '標準雙人房', 'price': 2280},
+            '標準三人': {'code': 'ST', 'name': '標準三人房', 'price': 2880},
+            '標準四人': {'code': 'SQ', 'name': '標準四人房', 'price': 3680},
+        }
+        
+        # 解析格式：「2間雙人房」「雙人房 x 2」「1雙人1三人」
+        patterns = [
+            r'(\d+)\s*間?\s*(雙人|三人|四人|標準雙人|標準三人|標準四人)',  # 2間雙人
+            r'(雙人|三人|四人|標準雙人|標準三人|標準四人)\s*[xX×]\s*(\d+)',  # 雙人 x 2
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, rooms)
+            for match in matches:
+                if len(match) == 2:
+                    if match[0].isdigit():
+                        count, room_type = int(match[0]), match[1]
+                    else:
+                        room_type, count = match[0], int(match[1])
+                    
+                    if room_type in room_mapping:
+                        room_info = room_mapping[room_type].copy()
+                        room_info['count'] = count
+                        result.append(room_info)
+        
+        return result if result else None
+    
+    def _submit_booking_to_pms(self, booking_data: Dict) -> Dict:
+        """提交訂單到 PMS（複用現有邏輯）"""
+        try:
+            # 使用現有的 PMS Client
+            rooms = booking_data.get('rooms', [])
+            
+            for room in rooms:
+                # 構建 API 期望的 booking_data 字典
+                pms_booking_data = {
+                    'room_type_code': room['code'],
+                    'room_type_name': room['name'],
+                    'room_count': room['count'],
+                    'nights': 1,  # 當日預訂
+                    'guest_name': booking_data['guest_name'],
+                    'phone': booking_data['phone'],
+                    'arrival_time': booking_data['arrival_time'],
+                    'bed_type': booking_data.get('bed_type'),
+                    'special_requests': booking_data.get('special_requests'),
+                    'line_user_id': booking_data.get('line_user_id'),
+                    'line_display_name': booking_data.get('line_display_name')
+                }
+                
+                result = self.pms_client.create_same_day_booking(pms_booking_data)
+                
+                if not result or not result.get('success'):
+                    return {
+                        "success": False,
+                        "error": result.get('error', '預訂失敗') if result else '連線失敗'
+                    }
+            
+            return {"success": True}
+            
+        except Exception as e:
+            print(f"❌ PMS 訂房錯誤: {e}")
+            return {"success": False, "error": str(e)}
+

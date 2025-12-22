@@ -11,6 +11,17 @@
 
 ---
 
+## [1.9.9] - 2025-12-22
+### 🔧 Bot 模組化重構
+- **LINE Bot**: `bot.py` 從 1821 行減至 817 行（-55%）
+- **新增模組**: `prompts/` 獨立管理 System Prompt
+- **重構**: `check_order_status` 和 `create_same_day_booking` 改為 Wrapper，邏輯移至 Handler
+
+#### 詳細模組變更
+- [LINE Bot (v1.9.9)](./LINEBOT/CHANGELOG.md#199---2025-12-22) - 完整重構說明
+
+---
+
 ## [1.9.8] - 2025-12-22
 ### ✨ 訂單查詢系統優化 Phase 1
 - **LINE Bot**: 實作「AI + Helper 雙層驗證」架構，解決訂單編號被誤判為電話/時間的問題
