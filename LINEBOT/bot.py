@@ -267,6 +267,30 @@ class HotelBot:
         """
         print(f"🔧 Tool Called: check_today_availability()")
         
+        # 🆕 漸進式暫存：意圖確認，立刻記錄 LINE 資訊
+        if hasattr(self, 'current_user_id') and self.current_user_id:
+            from datetime import datetime
+            order_id = f"WI{datetime.now().strftime('%m%d%H%M')}"
+            try:
+                self.pms_client.create_same_day_booking({
+                    'order_id': order_id,
+                    'line_user_id': self.current_user_id,
+                    'line_display_name': getattr(self, 'current_display_name', ''),
+                    'status': 'incomplete',
+                    'room_type_code': '',
+                    'room_count': 0,
+                    'guest_name': '',
+                    'phone': '',
+                    'arrival_time': ''
+                })
+                # 保存到 context 供後續更新使用
+                if not hasattr(self, 'user_context'):
+                    self.user_context = {}
+                self.user_context[self.current_user_id] = {'pending_order_id': order_id}
+                print(f"📝 漸進式暫存：意圖確認，已建立 {order_id}")
+            except Exception as e:
+                print(f"⚠️ 漸進式暫存失敗: {e}")
+        
         result = self.pms_client.get_today_availability()
         
         if not result or not result.get('success'):
@@ -329,6 +353,12 @@ class HotelBot:
         """
         print(f"🔧 Tool Called: create_same_day_booking(rooms={rooms}, name={guest_name})")
         
+        # 取得之前暫存的 order_id（如果有）
+        pending_order_id = None
+        if hasattr(self, 'user_context') and self.current_user_id in self.user_context:
+            pending_order_id = self.user_context[self.current_user_id].get('pending_order_id')
+            print(f"📝 沿用之前的 order_id: {pending_order_id}")
+        
         return self.same_day_handler.create_booking_for_ai(
             user_id=self.current_user_id,
             rooms=rooms,
@@ -337,7 +367,8 @@ class HotelBot:
             arrival_time=arrival_time,
             bed_type=bed_type,
             special_requests=special_requests,
-            display_name=getattr(self, 'current_display_name', None)
+            display_name=getattr(self, 'current_display_name', None),
+            pending_order_id=pending_order_id  # 沿用之前的 order_id
         )
 
     def get_weather_forecast(self, date_str: str):

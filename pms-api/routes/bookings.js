@@ -626,6 +626,60 @@ router.get('/same-day-list', async (req, res) => {
 });
 
 /**
+ * GET /api/bookings/same-day/by-user/:line_user_id
+ * 查詢該用戶是否有未完成的當日預訂
+ * 用於客人中斷後恢復進度
+ */
+router.get('/same-day/by-user/:line_user_id', (req, res) => {
+    try {
+        const { line_user_id } = req.params;
+        const today = new Date().toISOString().slice(0, 10);
+        const filePath = path.join(__dirname, '../data/same_day_bookings.json');
+
+        if (!fs.existsSync(filePath)) {
+            return res.json({ success: true, data: null, message: '無未完成訂單' });
+        }
+
+        const content = fs.readFileSync(filePath, 'utf8');
+        const bookings = JSON.parse(content) || [];
+
+        // 找該用戶今日未完成的訂單（status 不是 checked_in 或 cancelled）
+        const userBooking = bookings.find(b =>
+            b.line_user_id === line_user_id &&
+            b.check_in_date === today &&
+            b.status !== 'checked_in' &&
+            b.status !== 'cancelled'
+        );
+
+        if (userBooking) {
+            console.log(`🔍 找到用戶 ${line_user_id} 的未完成訂單: ${userBooking.order_id}`);
+            res.json({
+                success: true,
+                data: {
+                    order_id: userBooking.order_id,
+                    item_id: userBooking.item_id,
+                    status: userBooking.status,
+                    room_type_code: userBooking.room_type_code,
+                    room_type_name: userBooking.room_type_name,
+                    room_count: userBooking.room_count,
+                    guest_name: userBooking.guest_name,
+                    phone: userBooking.phone,
+                    arrival_time: userBooking.arrival_time,
+                    line_display_name: userBooking.line_display_name,
+                    created_at: userBooking.created_at
+                }
+            });
+        } else {
+            res.json({ success: true, data: null, message: '無未完成訂單' });
+        }
+
+    } catch (err) {
+        console.error('查詢用戶訂單失敗：', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * PATCH /api/bookings/same-day/:order_id/checkin
  * 標記暫存訂單為已 KEY（已入住）
  * 
@@ -1057,8 +1111,9 @@ router.post('/same-day', async (req, res) => {
             line_display_name
         } = req.body;
 
-        // 驗證必填欄位
-        if (!room_type_code || !room_count || !guest_name || !phone || !arrival_time) {
+        // 驗證必填欄位（incomplete 狀態跳過驗證，用於漸進式暫存）
+        const isIncomplete = req.body.status === 'incomplete';
+        if (!isIncomplete && (!room_type_code || !room_count || !guest_name || !phone || !arrival_time)) {
             return res.status(400).json({
                 success: false,
                 error: {
@@ -1126,11 +1181,31 @@ router.post('/same-day', async (req, res) => {
             }
         }
 
-        // 新增訂單
-        bookings.push(orderData);
-        fs.writeFileSync(filePath, JSON.stringify(bookings, null, 2), 'utf8');
+        // 檢查是否已存在同 order_id 或 同 line_user_id 的 incomplete 訂單
+        let existingIndex = bookings.findIndex(b => b.order_id === orderId || b.item_id === itemId);
 
-        console.log(`📝 當日預訂已建立：${itemId} - ${guest_name} - ${room_type_name} x${room_count}`);
+        // 如果沒找到 order_id 匹配，檢查同 line_user_id 的 incomplete 訂單
+        if (existingIndex < 0 && line_user_id) {
+            existingIndex = bookings.findIndex(b =>
+                b.line_user_id === line_user_id &&
+                b.check_in_date === checkInDate &&
+                (b.status === 'incomplete' || b.status === 'pending')
+            );
+            if (existingIndex >= 0) {
+                console.log(`🔍 找到同 LINE ID 的訂單：${bookings[existingIndex].order_id}，將更新而非新增`);
+            }
+        }
+
+        if (existingIndex >= 0) {
+            // 保留原有資料，用新資料覆蓋（支援漸進式更新）
+            bookings[existingIndex] = { ...bookings[existingIndex], ...orderData };
+            console.log(`📝 當日預訂已更新：${bookings[existingIndex].order_id} - ${guest_name || bookings[existingIndex].guest_name}`);
+        } else {
+            // 新增記錄
+            bookings.push(orderData);
+            console.log(`📝 當日預訂已建立：${itemId} - ${guest_name} - ${room_type_name} x${room_count}`);
+        }
+        fs.writeFileSync(filePath, JSON.stringify(bookings, null, 2), 'utf8');
 
         res.json({
             success: true,

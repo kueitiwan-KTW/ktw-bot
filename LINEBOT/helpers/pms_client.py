@@ -367,6 +367,42 @@ class PMSClient:
             print(f"❌ 查詢當日預訂列表失敗: {e}")
             return None
     
+    def get_user_incomplete_booking(self, line_user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        查詢用戶未完成的當日預訂
+        用於客人中斷後恢復進度
+        
+        Args:
+            line_user_id: LINE 用戶 ID
+        
+        Returns:
+            未完成的訂單資訊，無則返回 None
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            url = f"{self.base_url}/bookings/same-day/by-user/{line_user_id}"
+            print(f"📡 PMS API Request: GET {url}")
+            
+            response = requests.get(url, timeout=self.timeout)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success') and data.get('data'):
+                    print(f"🔍 找到用戶未完成訂單: {data['data'].get('order_id')}")
+                    return data['data']
+                else:
+                    print(f"ℹ️ 用戶無未完成訂單")
+                    return None
+            else:
+                print(f"⚠️ PMS API Error: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ 查詢用戶未完成訂單失敗: {e}")
+            return None
+    
     
     def cancel_same_day_booking(self, order_id: str) -> Optional[Dict[str, Any]]:
         """

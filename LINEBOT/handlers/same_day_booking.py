@@ -541,14 +541,36 @@ class SameDayBookingHandler:
     
     def _start_booking(self, user_id: str, session: Dict) -> str:
         """開始預訂流程"""
+        from datetime import datetime
         
         # 檢查時間
         if not self.is_within_booking_hours():
             self.clear_session(user_id)
-            return """抱歉，當日預訂服務僅開放至晚上 10 點。
+            return """抱歉，當日預訂服務僅開放至晚上 8 點。
 
 若您有住宿需求，歡迎透過官網預訂：
 🌐 https://ktwhotel.com/2cTrT"""
+        
+        # 🆕 生成 order_id 並立刻暫存（漸進式暫存）
+        order_id = f"WI{datetime.now().strftime('%m%d%H%M')}"
+        session['order_id'] = order_id
+        
+        # 立刻暫存到 PMS（只有 LINE 資訊）
+        try:
+            self.pms_client.create_same_day_booking({
+                'order_id': order_id,
+                'line_user_id': user_id,
+                'line_display_name': session.get('line_display_name', ''),
+                'status': 'incomplete',
+                'room_type_code': '',
+                'room_count': 0,
+                'guest_name': '',
+                'phone': '',
+                'arrival_time': ''
+            })
+            print(f"📝 漸進式暫存：已建立 {order_id}")
+        except Exception as e:
+            print(f"⚠️ 漸進式暫存失敗: {e}")
         
         # 從 API 獲取今日房價
         result = self.pms_client.get_today_availability()
@@ -1152,6 +1174,40 @@ class SameDayBookingHandler:
         # 資訊完整，進入確認階段
         self.state_machine.transition(user_id, self.state_machine.STATE_BOOKING_CONFIRM)
         
+        # 🆕 漸進式更新暫存（資訊已完整，改為 pending）
+        order_id = session.get('order_id')
+        if order_id:
+            try:
+                # 取得房型資訊
+                if session.get('is_multi_room'):
+                    orders = session.get('multi_room_orders', [])
+                    room_type_code = ','.join([o['room']['code'] for o in orders])
+                    room_type_name = ','.join([o['room']['name'] for o in orders])
+                    room_count = sum(o['count'] for o in orders)
+                else:
+                    room = session.get('selected_room', {})
+                    room_type_code = room.get('code', '')
+                    room_type_name = room.get('name', '')
+                    room_count = session.get('room_count', 1)
+                
+                self.pms_client.create_same_day_booking({
+                    'order_id': order_id,
+                    'line_user_id': user_id,
+                    'line_display_name': session.get('line_display_name', ''),
+                    'status': 'pending',  # 資訊已完整
+                    'room_type_code': room_type_code,
+                    'room_type_name': room_type_name,
+                    'room_count': room_count,
+                    'guest_name': session.get('guest_name', ''),
+                    'phone': session.get('phone', ''),
+                    'arrival_time': session.get('arrival_time', ''),
+                    'bed_type': session.get('bed_type', ''),
+                    'special_requests': session.get('special_requests', '')
+                })
+                print(f"📝 漸進式暫存：已更新 {order_id} (pending)")
+            except Exception as e:
+                print(f"⚠️ 漸進式更新失敗: {e}")
+        
         today = datetime.now().strftime('%Y-%m-%d')
         
         # 根據是否為多房型生成不同的確認訊息
@@ -1565,7 +1621,8 @@ class SameDayBookingHandler:
         arrival_time: str,
         bed_type: str = None,
         special_requests: str = None,
-        display_name: str = None
+        display_name: str = None,
+        pending_order_id: str = None  # 沿用之前的 order_id
     ) -> Dict[str, Any]:
         """
         供 AI Function Calling 調用的當日預訂入口
@@ -1616,6 +1673,7 @@ class SameDayBookingHandler:
         
         # 4️⃣ 記錄訂單
         booking_data = {
+            "order_id": pending_order_id,  # 沿用之前的 order_id（如果有）
             "guest_name": guest_name,
             "phone": phone_clean,
             "arrival_time": arrival_time,

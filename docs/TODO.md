@@ -124,4 +124,94 @@ CREATE TABLE same_day_bookings (
 
 ---
 
+### 【高優先】漸進式暫存功能測試
+
+**已完成項目**（2025-12-22）：
+- ✅ PMS-API 支援 `incomplete` 狀態跳過必填驗證
+- ✅ PMS-API 支援用 `line_user_id` 核對，避免重複訂單
+- ✅ Bot 在 `check_today_availability` 時就暫存 LINE 資訊
+- ✅ Admin-Web 顯示 `guest_name` 和 `line_display_name`
+
+**待測試項目**：
+- [ ] 測試完整當日預訂流程（今天超過 20:00，明天再測）
+- [ ] 確認訂單不會重複（用 LINE ID 核對）
+- [ ] 確認中途離開時 Admin-Web 有顯示 incomplete 訂單
+
+**待開發項目**：
+- [ ] AI 中途收集資訊時更新暫存（新增 `update_booking_info` 工具）
+- [ ] 客人回來時查詢恢復進度（已有 API，Bot 端未接入）
+
+**相關檔案**：
+- `pms-api/routes/bookings.js` - POST same-day 端點
+- `LINEBOT/bot.py` - check_today_availability
+- `LINEBOT/handlers/same_day_booking.py` - create_booking_for_ai
+- `LINEBOT/helpers/pms_client.py` - get_user_incomplete_booking
+
+**提出日期**：2025-12-22
+
+---
+
+### 【長期】商業化 PMS 規劃
+
+**目標**：將 KTW Bot + Admin-Web 發展成商業化 PMS 系統
+
+**產品架構**：
+```
+┌─────────────────────────────────────────────────┐
+│           公開網站層                              │
+├─────────────────────────────────────────────────┤
+│ 🌐 形象官網 (Next.js)   📱 LINE Bot (Flask)       │
+│ (品牌展示/訂房入口)      (客服/當日訂房)            │
+└─────────────────────────────────────────────────┘
+                       │
+┌─────────────────────────────────────────────────┐
+│           管理層                                 │
+├─────────────────────────────────────────────────┤
+│ 🖥️ Admin-Web / PMS (Vue + TypeScript)           │
+│ (房況/訂單/入住/報表/權限)                         │
+└─────────────────────────────────────────────────┘
+                       │
+┌─────────────────────────────────────────────────┐
+│           資料層                                 │
+├─────────────────────────────────────────────────┤
+│ 🗄️ PostgreSQL (主資料庫)                         │
+│ 📦 Redis (快取)                                  │
+└─────────────────────────────────────────────────┘
+```
+
+**待開發項目**：
+
+1. **帳號權限系統**
+   - [ ] JWT Token + RBAC（Role-Based Access Control）
+   - [ ] 角色：超級管理員、櫃檯、房務、會計
+   - [ ] 登入/登出/密碼重設
+
+2. **技術升級**
+   - [ ] Admin-Web 改用 TypeScript
+   - [ ] 資料庫遷移到 PostgreSQL
+   - [ ] 加入 Auth 中介層
+
+3. **部署架構**
+   - [ ] Admin-Web → Vercel（靜態托管）
+   - [ ] LINE Bot → Cloud Run
+   - [ ] PMS API → Cloud Run
+   - [ ] 資料庫 → Cloud SQL
+
+4. **形象官網**
+   - [ ] 技術選型：Next.js（SSR 對 SEO 好）
+   - [ ] 功能：房型介紹、線上訂房、相簿、位置
+   - [ ] 訂房整合：接官網訂房引擎 or 自建
+
+5. **Bot 設定 UI（SaaS 自助設定）**
+   - [ ] 基本資訊：飯店名稱、地址、電話、Logo
+   - [ ] 房型設定：新增/編輯/刪除房型、價格、床型
+   - [ ] 知識庫編輯器：FAQ 問答管理
+   - [ ] AI 人格設定：口吻、暱稱、表情符號風格
+   - [ ] 訂房規則：當日截止時間、取消政策
+   - [ ] LINE 設定：Channel Token、Webhook URL
+
+**提出日期**：2025-12-22
+
+---
+
 *最後更新：2025-12-22*

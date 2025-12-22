@@ -842,7 +842,7 @@ const statusIcons = {
                     <span class="expand-icon" @click="toggleOrderExpand(group.order_id)">{{ isOrderExpanded(group.order_id) ? '▼' : '▶' }}</span>
                     <span class="order-id" @click="toggleOrderExpand(group.order_id)">{{ group.order_id }}</span>
                     <span class="guest-info" @click="toggleOrderExpand(group.order_id)">
-                      👤 {{ group.guest_name }} | 📞 {{ group.phone }} | 🕐 {{ group.arrival_time }}
+                      👤 {{ group.guest_name || '-' }} <span v-if="group.line_display_name" class="line-name">({{ group.line_display_name }})</span> | 📞 {{ group.phone || '-' }} | 🕐 {{ group.arrival_time || '-' }}
                     </span>
                     <span class="room-count-badge">{{ group.items.length }} 間</span>
                     <!-- 大訂單狀態顯示 -->
