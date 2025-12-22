@@ -62,3 +62,9 @@ build/
 .output/
 .nuxt/
 
+
+# 敏感資料 - SSH 主機清單
+.agent/workflows/ssh-hosts.md
+
+# Agent workflows - 可能含敏感資料
+.agent/workflows/
