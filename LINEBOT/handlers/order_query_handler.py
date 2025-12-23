@@ -10,7 +10,8 @@ from .base_handler import BaseHandler
 from helpers.order_helper import (
     ROOM_TYPES, normalize_phone, clean_ota_id, 
     detect_booking_source, get_breakfast_info, get_resume_message,
-    sync_order_details, validate_arrival_time, is_vague_time
+    sync_order_details, validate_arrival_time, is_vague_time,
+    format_order_display
 )
 from helpers.intent_detector import IntentDetector
 
@@ -274,15 +275,8 @@ class OrderQueryHandler(BaseHandler):
         """
         格式化訂單資訊 - 標準 8 欄位制式格式
         
-        必須輸出的 8 個欄位（順序固定）：
-        1. 訂單來源
-        2. 預約編號
-        3. 訂房人姓名
-        4. 聯絡電話
-        5. 入住日期
-        6. 退房日期
-        7. 房型
-        8. 早餐
+        使用 format_order_display (SSOT) 共用函數，
+        僅保留取消訂單的特殊處理邏輯。
         """
         
         # 檢查訂單狀態：如果已取消，返回簡化訊息
@@ -295,55 +289,8 @@ class OrderQueryHandler(BaseHandler):
 此訂單已經取消，無法辦理入住。
 如有疑問，請聯繫櫃檯：(03) 832-5700"""
         
-        # 正常訂單處理 - 8 欄位制式格式
-        lines = []
-        
-        # 1. 訂單來源 (必填)
-        ota_id = order_data.get('ota_booking_id', '')
-        booking_source = detect_booking_source(
-            remarks=order_data.get('remarks', ''),
-            ota_id=ota_id
-        )
-        lines.append(f"訂單來源: {booking_source}")
-        
-        # 2. 預約編號 (必填)
-        pms_id = order_data.get('order_id', '未知')
-        display_ota = clean_ota_id(ota_id)
-        display_id = display_ota if display_ota else pms_id
-        lines.append(f"預約編號: {display_id}")
-        
-        # 3. 訂房人姓名 (必填，無資料顯示 '未提供')
-        guest_name = order_data.get('guest_name') or '未提供'
-        lines.append(f"訂房人姓名: {guest_name}")
-        
-        # 4. 聯絡電話 (必填，無資料顯示 '未提供')
-        phone = order_data.get('phone') or order_data.get('contact_phone') or '未提供'
-        lines.append(f"聯絡電話: {phone}")
-        
-        # 5. 入住日期 (必填，無資料顯示 '未提供')
-        check_in = order_data.get('check_in') or '未提供'
-        lines.append(f"入住日期: {check_in}")
-        
-        # 6. 退房日期 (必填，無資料顯示 '未提供'，有資料則附加晚數)
-        check_out = order_data.get('check_out') or '未提供'
-        if check_out != '未提供' and order_data.get('nights'):
-            nights = order_data.get('nights', 1)
-            lines.append(f"退房日期: {check_out} (共 {nights} 晚)")
-        else:
-            lines.append(f"退房日期: {check_out}")
-        
-        # 7. 房型 (必填，無資料顯示 '未知')
-        room_type = order_data.get('room_type') or '未知'
-        lines.append(f"房型: {room_type}")
-        
-        # 8. 早餐 (必填，預設 '含早餐')
-        remarks = order_data.get('remarks', '') or ''
-        breakfast = "含早餐"
-        if '不含早' in remarks or '無早' in remarks:
-            breakfast = "不含早餐"
-        lines.append(f"早餐: {breakfast}")
-        
-        return '\n'.join(lines)
+        # 正常訂單：使用共用格式化函數 (SSOT)
+        return format_order_display(order_data)
     
     def _handle_order_confirmation(self, user_id: str, message: str) -> str:
         """處理訂單確認（增強版：加入特殊需求偵測）"""

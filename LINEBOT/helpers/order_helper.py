@@ -96,6 +96,89 @@ def get_breakfast_info(remarks: str = "", rooms: List[Dict] = None) -> str:
             
     return "含早餐"
 
+
+def format_order_display(order_data: Dict[str, Any]) -> str:
+    """
+    格式化訂單資訊 - 標準 8 欄位制式格式 (SSOT)
+    
+    此函數為單一真實來源 (Single Source of Truth)，
+    供 LINE Bot、Payload CMS、Admin Dashboard 等系統共用。
+    
+    必須輸出的 8 個欄位（順序固定）：
+    1. 訂單來源
+    2. 預約編號
+    3. 訂房人姓名
+    4. 聯絡電話
+    5. 入住日期
+    6. 退房日期
+    7. 房型
+    8. 早餐
+    
+    Args:
+        order_data: 訂單資料字典，需包含以下欄位：
+            - ota_booking_id: OTA 訂單編號（可選）
+            - order_id: PMS 訂單編號
+            - guest_name: 訂房人姓名
+            - phone / contact_phone: 聯絡電話
+            - check_in: 入住日期
+            - check_out: 退房日期
+            - nights: 入住晚數（可選）
+            - room_type: 房型名稱
+            - remarks: 備註（用於判斷早餐）
+    
+    Returns:
+        str: 格式化後的訂單資訊文字
+    """
+    lines = []
+    
+    # 1. 訂單來源 (必填)
+    ota_id = order_data.get('ota_booking_id', '')
+    booking_source = detect_booking_source(
+        remarks=order_data.get('remarks', ''),
+        ota_id=ota_id
+    )
+    lines.append(f"訂單來源: {booking_source}")
+    
+    # 2. 預約編號 (必填)
+    pms_id = order_data.get('order_id', '未知')
+    display_ota = clean_ota_id(ota_id)
+    display_id = display_ota if display_ota else pms_id
+    lines.append(f"預約編號: {display_id}")
+    
+    # 3. 訂房人姓名 (必填，無資料顯示 '未提供')
+    guest_name = order_data.get('guest_name') or '未提供'
+    lines.append(f"訂房人姓名: {guest_name}")
+    
+    # 4. 聯絡電話 (必填，無資料顯示 '未提供')
+    phone = order_data.get('phone') or order_data.get('contact_phone') or '未提供'
+    lines.append(f"聯絡電話: {phone}")
+    
+    # 5. 入住日期 (必填，無資料顯示 '未提供')
+    check_in = order_data.get('check_in') or '未提供'
+    lines.append(f"入住日期: {check_in}")
+    
+    # 6. 退房日期 (必填，無資料顯示 '未提供'，有資料則附加晚數)
+    check_out = order_data.get('check_out') or '未提供'
+    if check_out != '未提供' and order_data.get('nights'):
+        nights = order_data.get('nights', 1)
+        lines.append(f"退房日期: {check_out} (共 {nights} 晚)")
+    else:
+        lines.append(f"退房日期: {check_out}")
+    
+    # 7. 房型 (必填，無資料顯示 '未知')
+    room_type = order_data.get('room_type') or '未知'
+    lines.append(f"房型: {room_type}")
+    
+    # 8. 早餐 (必填，使用 get_breakfast_info 判斷)
+    breakfast = get_breakfast_info(
+        remarks=order_data.get('remarks', ''),
+        rooms=order_data.get('rooms', [])
+    )
+    lines.append(f"早餐: {breakfast}")
+    
+    return '\n'.join(lines)
+
+
 def get_resume_message(pending_intent: str) -> str:
     """
     取得中斷恢復的統一提示訊息
@@ -105,6 +188,7 @@ def get_resume_message(pending_intent: str) -> str:
         'order_query': "━━━━━━━━━━━━━━━\n🔔 您剛剛提到的「查詢訂單」，現在可以為您處理囉！\n\n請提供您的訂單編號或訂房截圖。"
     }
     return messages.get(pending_intent, "")
+
 
 def sync_order_details(order_id: str, data: Dict[str, Any], logger: Any, pms_client: Any, ota_id: str = None) -> bool:
     """
