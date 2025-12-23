@@ -68,3 +68,6 @@ build/
 
 # Agent workflows - 可能含敏感資料
 .agent/workflows/
+
+# Agent 設定（完整目錄）
+.agent/

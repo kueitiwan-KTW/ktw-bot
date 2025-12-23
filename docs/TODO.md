@@ -214,4 +214,44 @@ CREATE TABLE same_day_bookings (
 
 ---
 
-*最後更新：2025-12-22*
+### 【中優先】房控系統整合（RmsServer XML）
+
+**需求描述**：
+- 防控主機 (192.168.8.23) 上的 RmsServer 會產生房間狀態 XML 檔案
+- 目前由 `a6gw_file.exe` 讀取後寫入 PMS Oracle DB
+- 目標：自行解析 XML，繞過舊系統直接整合到新架構
+
+**系統架構**：
+```
+房間感應器 → RmsServer.exe → C:\room\ (XML)
+                                ↓
+                [新系統] Python 監控腳本
+                                ↓
+            KTW-backend → Admin-Web / LINE Bot
+```
+
+**XML 格式**：
+```xml
+<ROWSET><ROW>
+  <ROOM_NOS>616</ROOM_NOS>
+  <ROOM_STA>V</ROOM_STA>     <!-- 房間狀態 -->
+  <ACTION_DAT>2025/12/23 00:31:36</ACTION_DAT>
+</ROW></ROWSET>
+```
+
+**待完成項目**：
+- [ ] 設定防控主機 SSH 公鑰認證
+- [ ] 開發 Python 腳本監控 `C:\room\` 新 XML
+- [ ] 解析 `ROOM_STA` 完整狀態碼對照表
+- [ ] 推送房控訊號至 Admin-Web
+
+**相關資源**：
+- [房控系統探索報告](./房控系統探索報告_2025-12-23.md)
+- SSH 主機資訊：`.agent/workflows/ssh-hosts.md`
+
+**提出日期**：2025-12-23
+
+---
+
+*最後更新：2025-12-23*
+
