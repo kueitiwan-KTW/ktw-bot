@@ -71,3 +71,6 @@ build/
 
 # Agent 設定（完整目錄）
 .agent/
+
+# Obsidian 設定（各裝置獨立）
+.obsidian/
