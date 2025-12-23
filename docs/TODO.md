@@ -126,16 +126,14 @@ CREATE TABLE same_day_bookings (
 
 ### 【高優先】漸進式暫存功能測試
 
-**已完成項目**（2025-12-22）：
+**已完成項目**（2025-12-23 更新）：
 - ✅ PMS-API 支援 `incomplete` 狀態跳過必填驗證
 - ✅ PMS-API 支援用 `line_user_id` 核對，避免重複訂單
 - ✅ Bot 在 `check_today_availability` 時就暫存 LINE 資訊
 - ✅ Admin-Web 顯示 `guest_name` 和 `line_display_name`
-
-**待測試項目**：
-- [ ] 測試完整當日預訂流程（今天超過 20:00，明天再測）
-- [ ] 確認訂單不會重複（用 LINE ID 核對）
-- [ ] 確認中途離開時 Admin-Web 有顯示 incomplete 訂單
+- ✅ 測試完整當日預訂流程（2025-12-23 測試通過）
+- ✅ 確認訂單不會重複（用 LINE ID 核對成功）
+- ✅ Admin-Web mismatch 訂單取消按鈕修復
 
 **待開發項目**：
 - [ ] AI 中途收集資訊時更新暫存（新增 `update_booking_info` 工具）
