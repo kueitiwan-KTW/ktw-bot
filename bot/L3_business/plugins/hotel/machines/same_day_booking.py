@@ -182,17 +182,107 @@ class SimpleSameDayBookingMachine:
     """
     簡化版當日預訂狀態機
     
-    可以在未安裝 python-statemachine 時使用
+    支援：
+    - SessionManager 整合（持久化）
+    - Event 格式（統一事件處理）
     """
     
     STATES = ['idle', 'confirming_room', 'collecting_phone', 'collecting_arrival', 'collecting_special', 'completed', 'cancelled']
     
-    def __init__(self, model: BookingData = None, user_id: str = None, tenant_id: str = None):
+    # 事件名稱常數
+    EVENT_START = 'BOOKING_START'
+    EVENT_CONFIRM = 'BOOKING_CONFIRM'
+    EVENT_PHONE = 'BOOKING_PHONE'
+    EVENT_ARRIVAL = 'BOOKING_ARRIVAL'
+    EVENT_SPECIAL = 'BOOKING_SPECIAL'
+    EVENT_CANCEL = 'CANCEL'
+    
+    def __init__(self, model: BookingData = None, user_id: str = None, tenant_id: str = None, session_manager = None):
         self.model = model or BookingData()
         self.user_id = user_id
         self.tenant_id = tenant_id
         self.current_state = 'idle'
+        self.session_manager = session_manager
+        
+        # 如果有 SessionManager，從 session 恢復狀態
+        if session_manager and user_id:
+            session_state = session_manager.get_state(user_id)
+            if session_state.startswith('booking.'):
+                self.current_state = session_state.replace('booking.', '')
+                data = session_manager.get_data(user_id)
+                if data:
+                    self._restore_from_session_data(data)
     
+    def _restore_from_session_data(self, data: Dict[str, Any]):
+        """從 session 資料恢復 model"""
+        self.model.room_type = data.get('room_type', '')
+        self.model.room_count = data.get('room_count', 1)
+        self.model.guests = data.get('guests', 2)
+        self.model.guest_name = data.get('guest_name', '')
+        self.model.phone = data.get('phone', '')
+        self.model.arrival_time = data.get('arrival_time', '')
+        self.model.special_requests = data.get('special_requests', '')
+    
+    def _sync_to_session(self):
+        """同步狀態到 SessionManager"""
+        if self.session_manager and self.user_id:
+            state = f'booking.{self.current_state}' if self.current_state != 'idle' else 'idle'
+            data = {
+                'room_type': self.model.room_type,
+                'room_count': self.model.room_count,
+                'guests': self.model.guests,
+                'guest_name': self.model.guest_name,
+                'phone': self.model.phone,
+                'arrival_time': self.model.arrival_time,
+                'special_requests': self.model.special_requests,
+            }
+            self.session_manager.set_state(self.user_id, state, data)
+    
+    def handle_event(self, event) -> str:
+        """
+        處理統一事件格式
+        
+        Args:
+            event: Event 物件，包含 name, slots, raw_text 等
+            
+        Returns:
+            回覆訊息
+        """
+        event_name = event.name if hasattr(event, 'name') else event.get('name', '')
+        slots = event.slots if hasattr(event, 'slots') else event.get('slots', {})
+        raw_text = event.raw_text if hasattr(event, 'raw_text') else event.get('raw_text', '')
+        
+        if event_name == self.EVENT_START:
+            room_type = slots.get('room_type', '標準雙人房')
+            room_count = slots.get('room_count', 1)
+            guests = slots.get('guests', 2)
+            return self.start_booking(room_type, room_count, guests)
+        elif event_name == self.EVENT_CONFIRM:
+            return self.confirm_room()
+        elif event_name == self.EVENT_PHONE:
+            phone = slots.get('phone', raw_text)
+            return self.got_phone(phone)
+        elif event_name == self.EVENT_ARRIVAL:
+            time = slots.get('time', raw_text)
+            return self.got_arrival(time)
+        elif event_name == self.EVENT_SPECIAL:
+            special = slots.get('special', raw_text)
+            return self.complete(special)
+        elif event_name == self.EVENT_CANCEL:
+            return self.cancel()
+        else:
+            # 根據當前狀態處理
+            if self.current_state == 'confirming_room':
+                return self.confirm_room()
+            elif self.current_state == 'collecting_phone':
+                return self.got_phone(raw_text)
+            elif self.current_state == 'collecting_arrival':
+                return self.got_arrival(raw_text)
+            elif self.current_state == 'collecting_special':
+                return self.complete(raw_text)
+            else:
+                return "我不太理解您的意思，請問您想做什麼？"
+
     def start_booking(self, room_type: str, room_count: int = 1, guests: int = 2) -> str:
         """開始預訂流程"""
         if self.current_state != 'idle':
