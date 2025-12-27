@@ -572,6 +572,9 @@ function startCountdown() {
 }
 
 onMounted(() => {
+  // 載入已確認的今日入住房間
+  loadAcknowledgedRooms();
+
   // 服務狀態檢測 (每5秒)
   checkServiceStatus();
   statusInterval = setInterval(checkServiceStatus, 5000);
@@ -691,12 +694,131 @@ onUnmounted(() => {
 const rooms = ref([]);
 const roomsLoading = ref(false);
 
-// 只顯示需要處理的房間（髒房、待檢查）
-const dirtyRooms = computed(() => {
-  return rooms.value.filter(
-    (r) => r.clean_status?.code === "D" || r.clean_status?.code === "I"
-  );
+// 已確認的今日入住房間（點擊後停止閃爍，後端資料庫同步）
+const acknowledgedRooms = ref(new Set());
+
+// 從後端 API 載入已確認房間（跨電腦同步）
+async function loadAcknowledgedRooms() {
+  try {
+    const res = await fetch("/api/room-acknowledgments");
+    const data = await res.json();
+    if (data.success && data.rooms) {
+      acknowledgedRooms.value = new Set(data.rooms);
+      console.log(`✅ 已載入 ${data.rooms.length} 間確認房間（${data.date}）`);
+    }
+  } catch (e) {
+    console.error("載入已確認房間失敗:", e);
+  }
+}
+
+// 確認房間（呼叫後端 API）
+async function acknowledgeRoom(roomNumber) {
+  // 立即更新 UI
+  acknowledgedRooms.value.add(roomNumber);
+  acknowledgedRooms.value = new Set(acknowledgedRooms.value);
+  
+  // 呼叫後端 API（跨電腦同步）
+  try {
+    await fetch("/api/room-acknowledgments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room_number: roomNumber }),
+    });
+  } catch (e) {
+    console.error("儲存確認狀態失敗:", e);
+  }
+}
+
+// 清除所有已確認（僅清除本地 UI，後端資料保留）
+function clearAcknowledgedRooms() {
+  acknowledgedRooms.value = new Set();
+}
+
+// 計算今日入住的房號列表
+const todayCheckinRoomNumbers = computed(() => {
+  const todayGuests = guestTabs["0"]?.data || [];
+  const roomNumbers = new Set();
+  todayGuests.forEach((guest) => {
+    // 從 room_numbers 陣列取得房號
+    if (guest.room_numbers && Array.isArray(guest.room_numbers)) {
+      guest.room_numbers.forEach((num) => roomNumbers.add(num));
+    }
+    // 也可能是 room_number 單一欄位
+    if (guest.room_number) {
+      roomNumbers.add(guest.room_number);
+    }
+  });
+  return roomNumbers;
 });
+
+// 只顯示需要處理的房間
+// 邏輯：
+// 1. 排除 OOS（維修中）的房間
+// 2. 今日入住房號（不管清潔狀態）+ 尚未確認 → 顯示並閃爍
+// 3. 點擊確認後 → 恢復原本邏輯（只顯示髒房/待檢查）
+const dirtyRooms = computed(() => {
+  return rooms.value
+    .filter((r) => {
+      // 排除維修房（ROOM_STA = R）
+      if (r.room_status?.code === "R") {
+        return false;
+      }
+      
+      const isDirtyOrInspecting = r.clean_status?.code === "D" || r.clean_status?.code === "I";
+      const isTodayCheckin = todayCheckinRoomNumbers.value.has(r.number);
+      const isAcknowledged = acknowledgedRooms.value.has(r.number);
+      
+      // 今日入住 + 尚未確認 → 強制顯示（不管清潔狀態）
+      if (isTodayCheckin && !isAcknowledged) {
+        return true;
+      }
+      
+      // 已確認 或 非今日入住 → 恢復原本邏輯（只顯示髒房/待檢查）
+      return isDirtyOrInspecting;
+    })
+    .map((r) => {
+      const isTodayCheckin = todayCheckinRoomNumbers.value.has(r.number);
+      const isAcknowledged = acknowledgedRooms.value.has(r.number);
+      return {
+        ...r,
+        isTodayCheckin,
+        isAcknowledged,
+        // 閃爍條件：今日入住 且 尚未確認
+        shouldBlink: isTodayCheckin && !isAcknowledged,
+      };
+    });
+});
+
+// 今日入住且尚未確認的待處理房間數量（閃爍中）
+const urgentRoomCount = computed(() => {
+  return dirtyRooms.value.filter((r) => r.shouldBlink).length;
+});
+
+// 已確認的今日入住房間數量（已停止閃爍）
+const acknowledgedCount = computed(() => {
+  return dirtyRooms.value.filter((r) => r.isTodayCheckin && r.isAcknowledged).length;
+});
+
+// 待處理房間按樓層分組（2F, 3F, 5F, 6F）
+const floors = ["2", "3", "5", "6"];
+const dirtyRoomsByFloor = computed(() => {
+  const grouped = {};
+  floors.forEach((floor) => {
+    grouped[floor] = dirtyRooms.value
+      .filter((r) => r.number && r.number.startsWith(floor))
+      .sort((a, b) => parseInt(a.number) - parseInt(b.number));
+  });
+  return grouped;
+});
+
+// 點擊房間：今日入住房間停止閃爍，恢復原本邏輯
+function handleRoomClick(room) {
+  if (room.shouldBlink) {
+    // 閃爍中的今日入住房間：確認後停止閃爍，恢復原本邏輯
+    acknowledgeRoom(room.number);
+  }
+  // 非閃爍房間：不做額外動作，保持原本行為（hover tooltip）
+}
 
 // 獲取房間狀態
 async function fetchRoomStatus() {
@@ -982,6 +1104,12 @@ const statusIcons = {
             <h3>
               🧹 待處理房間
               <span class="room-count">({{ dirtyRooms.length }})</span>
+              <span v-if="urgentRoomCount > 0" class="urgent-count">
+                ⚠️ {{ urgentRoomCount }} 間今日入住
+              </span>
+              <span v-if="acknowledgedCount > 0" class="acknowledged-count" @click="clearAcknowledgedRooms" title="點擊恢復顯示">
+                ✓ 已確認 {{ acknowledgedCount }} 間
+              </span>
               <div class="status-legend">
                 <span class="legend-item"
                   ><span class="dot dirty"></span>髒房</span
@@ -989,23 +1117,39 @@ const statusIcons = {
                 <span class="legend-item"
                   ><span class="dot inspecting"></span>待檢查</span
                 >
+                <span class="legend-item"
+                  ><span class="dot urgent"></span>今日入住 (點擊確認)</span
+                >
               </div>
             </h3>
             <div v-if="roomsLoading" class="loading-text">載入中...</div>
             <div v-else-if="dirtyRooms.length === 0" class="empty-text">
               ✅ 所有房間皆已清掃完成
             </div>
-            <div v-else class="room-grid" @mouseleave="hideTooltip">
+            <div v-else class="floor-grid" @mouseleave="hideTooltip">
+              <!-- 按樓層分組顯示 -->
               <div
-                v-for="room in dirtyRooms"
-                :key="room.number"
-                class="room-card"
-                :class="room.status"
-                @mouseenter="showTooltip(room, $event)"
-                @mousemove="moveTooltip"
-                @mouseleave="hideTooltip"
+                v-for="floor in floors"
+                :key="floor"
+                v-show="dirtyRoomsByFloor[floor]?.length > 0"
+                class="floor-row"
               >
-                <span class="room-number">{{ room.number }}</span>
+                <span class="floor-label">{{ floor }}F</span>
+                <div class="floor-rooms">
+                  <div
+                    v-for="room in dirtyRoomsByFloor[floor]"
+                    :key="room.number"
+                    class="room-card clickable"
+                    :class="[room.status, { urgent: room.shouldBlink }]"
+                    :title="room.shouldBlink ? `⚠️ 今日入住！點擊確認 ${room.number}` : `點擊查看 ${room.number} 的 PMS 狀態`"
+                    @click="handleRoomClick(room)"
+                    @mouseenter="showTooltip(room, $event)"
+                    @mousemove="moveTooltip"
+                    @mouseleave="hideTooltip"
+                  >
+                    <span class="room-number">{{ room.number }}</span>
+                  </div>
+                </div>
               </div>
             </div>
             <!-- 自定義 Tooltip -->

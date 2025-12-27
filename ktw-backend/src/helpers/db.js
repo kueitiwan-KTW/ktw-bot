@@ -447,5 +447,137 @@ export function getUserLatestOrder(lineUserId) {
     });
 }
 
-export default db;
+// ============================================
+// 房間確認狀態 (Room Acknowledgments)
+// 用於 Admin-Web 跨電腦同步
+// ============================================
 
+/**
+ * 初始化 room_acknowledgments 資料表
+ */
+function initRoomAcknowledgmentsTable() {
+    const schema = `
+        CREATE TABLE IF NOT EXISTS room_acknowledgments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_number TEXT NOT NULL,
+            date TEXT NOT NULL,
+            acknowledged_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(room_number, date)
+        );
+    `;
+    db.run(schema, (err) => {
+        if (err) {
+            console.error('❌ 初始化 room_acknowledgments 資料表失敗:', err.message);
+        } else {
+            console.log('✅ room_acknowledgments 資料表就緒');
+            // 清除過期記錄（只保留當日）
+            clearExpiredAcknowledgments();
+        }
+    });
+}
+
+// 延遲初始化
+setTimeout(initRoomAcknowledgmentsTable, 700);
+
+/**
+ * 取得當日已確認的房間列表
+ * @param {string} date - 日期 (YYYY-MM-DD)
+ * @returns {Promise<Array>} 已確認房間號碼列表
+ */
+export function getRoomAcknowledgments(date) {
+    return new Promise((resolve, reject) => {
+        db.all(
+            'SELECT room_number FROM room_acknowledgments WHERE date = ?',
+            [date],
+            (err, rows) => {
+                if (err) reject(err);
+                else resolve((rows || []).map(r => r.room_number));
+            }
+        );
+    });
+}
+
+/**
+ * 新增房間確認記錄
+ * @param {string} roomNumber - 房號
+ * @param {string} date - 日期 (YYYY-MM-DD)
+ */
+export function addRoomAcknowledgment(roomNumber, date) {
+    return new Promise((resolve, reject) => {
+        const sql = `
+            INSERT OR IGNORE INTO room_acknowledgments (room_number, date)
+            VALUES (?, ?)
+        `;
+        db.run(sql, [roomNumber, date], function (err) {
+            if (err) reject(err);
+            else resolve({ id: this.lastID, changes: this.changes });
+        });
+    });
+}
+
+/**
+ * 清除過期的確認記錄（只保留當日）
+ */
+export function clearExpiredAcknowledgments() {
+    const today = new Date().toISOString().split('T')[0];
+    return new Promise((resolve, reject) => {
+        db.run(
+            'DELETE FROM room_acknowledgments WHERE date < ?',
+            [today],
+            function (err) {
+                if (err) reject(err);
+                else {
+                    if (this.changes > 0) {
+                        console.log(`✅ 已清除 ${this.changes} 筆過期房間確認記錄`);
+                    }
+                    resolve({ changes: this.changes });
+                }
+            }
+        );
+    });
+}
+
+/**
+ * 清除所有確認記錄（每天 23:00 執行）
+ */
+export function clearAllAcknowledgments() {
+    return new Promise((resolve, reject) => {
+        db.run('DELETE FROM room_acknowledgments', function (err) {
+            if (err) reject(err);
+            else {
+                console.log(`🕐 每日 23:00 定時清除：已清除 ${this.changes} 筆房間確認記錄`);
+                resolve({ changes: this.changes });
+            }
+        });
+    });
+}
+
+/**
+ * 設定每天 23:00 自動清除確認記錄
+ */
+function scheduleNightlyClear() {
+    const now = new Date();
+    const target = new Date();
+    target.setHours(23, 0, 0, 0); // 今天 23:00
+    
+    // 如果已經過了今天 23:00，設定明天 23:00
+    if (now >= target) {
+        target.setDate(target.getDate() + 1);
+    }
+    
+    const msUntilTarget = target.getTime() - now.getTime();
+    
+    console.log(`⏰ 已設定每日 23:00 自動清除房間確認記錄（下次執行：${target.toLocaleString('zh-TW')}）`);
+    
+    // 第一次執行
+    setTimeout(() => {
+        clearAllAcknowledgments();
+        // 之後每 24 小時執行一次
+        setInterval(clearAllAcknowledgments, 24 * 60 * 60 * 1000);
+    }, msUntilTarget);
+}
+
+// 啟動定時任務
+setTimeout(scheduleNightlyClear, 1000);
+
+export default db;

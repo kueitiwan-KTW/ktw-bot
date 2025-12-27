@@ -7,7 +7,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import dotenv from 'dotenv';
-import { getSupplement, getAllSupplements, updateSupplement, getBotSession, updateBotSession, deleteBotSession, getAllActiveSessions, getAllVipUsers, getVipUser, addVipUser, deleteVipUser, saveUserOrderLink, getUserOrders, getUserLatestOrder } from './helpers/db.js';
+import { getSupplement, getAllSupplements, updateSupplement, getBotSession, updateBotSession, deleteBotSession, getAllActiveSessions, getAllVipUsers, getVipUser, addVipUser, deleteVipUser, saveUserOrderLink, getUserOrders, getUserLatestOrder, getRoomAcknowledgments, addRoomAcknowledgment } from './helpers/db.js';
 import { getBookingSource } from './helpers/bookingSource.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -252,6 +252,41 @@ app.get('/api/health', (req, res) => {
         service: 'KTW-Core',
         timestamp: new Date().toISOString()
     });
+});
+
+// ============================================
+// 房間確認狀態 API（跨電腦同步）
+// ============================================
+
+// 取得當日已確認的房間列表
+app.get('/api/room-acknowledgments', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const rooms = await getRoomAcknowledgments(today);
+        res.json({ success: true, date: today, rooms });
+    } catch (error) {
+        console.error('取得房間確認狀態失敗:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 新增房間確認記錄
+app.post('/api/room-acknowledgments', async (req, res) => {
+    try {
+        const { room_number } = req.body;
+        if (!room_number) {
+            return res.status(400).json({ success: false, error: '缺少 room_number' });
+        }
+        
+        const today = new Date().toISOString().split('T')[0];
+        await addRoomAcknowledgment(room_number, today);
+        
+        console.log(`✅ 房間 ${room_number} 已確認（${today}）`);
+        res.json({ success: true, room_number, date: today });
+    } catch (error) {
+        console.error('新增房間確認失敗:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // 系統狀態 API（給前端燈號用）
