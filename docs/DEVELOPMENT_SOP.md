@@ -349,7 +349,107 @@ def webhook(tenant_id):
 - **MCP Server 封裝**：每個飯店的 PMS 透過獨立 MCP Server 連接
 - **資料同步**：採用雙軌並行策略 (詳見第 6 章)
 
-### 1.6 輸出規範
+### 1.6 Zeabur 作業原則 ⭐
+
+> **核心理念**：非必要不使用瀏覽器操作 Zeabur，優先使用 CLI 命令行工具。
+
+**為什麼使用 CLI**：
+
+| 作業方式       | 優點                         | 缺點                   |
+| :------------- | :--------------------------- | :--------------------- |
+| **CLI (優先)** | 可自動化、可重複執行、有記錄 | 學習曲線               |
+| **瀏覽器**     | 直觀、易上手                 | 無法自動化、無操作記錄 |
+
+**CLI 設定 (首次使用)**：
+
+```bash
+# 登入 Zeabur
+npx zeabur auth login
+
+# 設定專案 Context (只需設定一次)
+source ~/ktw-projects/zeabur-switch.sh platform  # 或 bot / db
+```
+
+**常用 CLI 作業**：
+
+| 作業         | CLI 命令                                                 |
+| :----------- | :------------------------------------------------------- |
+| 查看 Logs    | `npx zeabur deployment log -t runtime \| tail -100`      |
+| 即時監控     | `npx zeabur deployment log -t runtime -w`                |
+| 重啟服務     | `npx zeabur service restart --id=<ID> -y`                |
+| 查看環境變數 | `npx zeabur variable list --id=<ID>`                     |
+| 更新環境變數 | `npx zeabur variable update --id=<ID> -k "KEY=value" -y` |
+| 查看資源使用 | `npx zeabur service metric CPU --id=<ID> -H 2`           |
+
+**服務 ID 對照**：
+
+| 服務名稱          | Service ID                 |
+| :---------------- | :------------------------- |
+| ktw-saas-platform | `69509aa57ab28c100bbc0aa7` |
+| ktw-saas-bot      | `69509ae97ab28c100bbc0abc` |
+| postgresql        | `6950c2a2479879e7ecdb006c` |
+
+**何時可使用瀏覽器**：
+
+- ✅ 首次設定 OAuth Callback URL（需要 UI 操作）
+- ✅ 首次綁定自訂網域 DNS
+- ✅ 查看完整 Deployment 歷史
+- ❌ 查看 Logs（使用 CLI）
+- ❌ 修改環境變數（使用 CLI）
+- ❌ 重啟服務（使用 CLI）
+
+**Workflow 文件**：
+
+詳細命令請參考 `.agent/workflows/zeabur-logs.md` 和 `.agent/workflows/zeabur-cli-reference.md`
+
+**錯誤修復記錄規範** ⭐：
+
+> [!IMPORTANT]
+> 任何 Zeabur 相關的錯誤與修復，**必須詳細記錄**。
+
+**記錄位置**：`ktw-saas-platform/CHANGELOG.md` 或相關專案的 CHANGELOG
+
+**必要記錄項目**：
+
+| 項目           | 說明              | 範例                                            |
+| :------------- | :---------------- | :---------------------------------------------- |
+| **錯誤現象**   | 發生了什麼問題    | `missing secret key` 錯誤導致 404               |
+| **發現時間**   | 何時發現          | 2025-12-29 21:20                                |
+| **根本原因**   | 為什麼會發生      | `PAYLOAD_SECRET` 與 `DATABASE_URL` 串接在同一行 |
+| **影響範圍**   | 影響了什麼功能    | 所有頁面無法載入，OAuth 登入失敗                |
+| **修復方式**   | 做了什麼修復      | 在環境變數編輯器中分行並重啟                    |
+| **驗證結果**   | 修復後的確認      | `✓ Ready in 539ms`，頁面正常載入                |
+| **使用的命令** | 用了哪些 CLI 命令 | `npx zeabur variable update ...`                |
+
+**記錄格式範例**：
+
+```markdown
+### 🐛 [2025-12-29] PAYLOAD_SECRET 環境變數格式錯誤
+
+**錯誤現象**：
+啟動時出現 `Error: missing secret key. A secret key is needed to secure Payload.`
+
+**根本原因**：
+Zeabur 環境變數編輯時，`DATABASE_URL` 和 `PAYLOAD_SECRET` 被串接在同一行：
+`DATABASE_URL=${POSTGRES_CONNECTION_STRING}PAYLOAD_SECRET=xxx`
+
+**修復方式**：
+
+1. 使用 CLI 確認問題：`npx zeabur variable list --id=69509aa57ab28c100bbc0aa7`
+2. 在瀏覽器中編輯原始環境變數，在兩個變數間加入換行
+3. 重啟服務：`npx zeabur service restart --id=69509aa57ab28c100bbc0aa7 -y`
+
+**驗證結果**：
+```
+
+✓ Ready in 539ms
+[Zeabur] Started container ktw-saas-platform
+
+```
+
+```
+
+### 1.7 輸出規範
 
 - **測試驗證**：輸出前自己必須模擬真實測試，反覆確認。
 - **語言絕對要求**：**全程繁體中文**。這包含：
