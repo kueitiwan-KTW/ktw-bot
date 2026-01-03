@@ -1,4 +1,0 @@
-# Bot 依賴
-Flask>=2.0.0
-line-bot-sdk>=3.0.0
-google-genai>=1.0.0
