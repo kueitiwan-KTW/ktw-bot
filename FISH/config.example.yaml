@@ -1,0 +1,33 @@
+# FISH 設定範本
+# 複製此檔案為 config.yaml 並填入實際值
+
+# 輪詢設定
+polling:
+  interval_minutes: 5 # 每幾分鐘輪詢一次
+  retry_attempts: 3 # 失敗重試次數
+
+# 瀏覽器設定
+browser:
+  headless: true # true=背景執行, false=顯示視窗
+  timeout: 30000 # 頁面載入逾時 (毫秒)
+
+# Agoda YCS 設定
+agoda:
+  enabled: true
+  url: "https://ycs.agoda.com/"
+  email: "your_email@example.com"
+  password: "your_password"
+  property_id: "12345" # 物業 ID
+
+# Booking.com Extranet 設定
+booking:
+  enabled: false
+  url: "https://admin.booking.com/"
+  email: "your_email@example.com"
+  password: "your_password"
+  property_id: "12345"
+
+# 通知設定 (可選)
+notification:
+  enabled: false
+  line_token: "" # LINE Notify Token

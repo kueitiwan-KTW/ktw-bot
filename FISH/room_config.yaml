@@ -1,0 +1,107 @@
+# FISH 房價設定
+# 支援 Agoda 和 Booking.com 設定不同房價
+
+room_types:
+  classic_double:
+    name: "經典雙人房"
+    agoda_room_id: "9899987"
+    booking_room_id: "" # TODO: 填入 Booking.com 房型 ID
+    base_inventory: 1
+
+    # 基準價格 (可個別平台覆蓋)
+    base_prices:
+      weekday: 2800
+      friday: 3200
+      saturday: 3500
+      sunday: 2800
+      holiday: 3800
+
+    # Agoda 專用價格 (覆蓋基準)
+    agoda_prices:
+      weekday: 2800
+      friday: 3200
+      saturday: 3500
+      sunday: 2800
+      holiday: 3800
+
+    # Booking.com 專用價格 (覆蓋基準)
+    booking_prices:
+      weekday: 3000 # 比 Agoda 高 200
+      friday: 3400
+      saturday: 3700
+      sunday: 3000
+      holiday: 4000
+
+  country_view_family:
+    name: "鄉村景家庭房(兩床)"
+    agoda_room_id: "9900031"
+    booking_room_id: ""
+    base_inventory: 1
+
+    base_prices:
+      weekday: 3500
+      friday: 4000
+      saturday: 4500
+      sunday: 3500
+      holiday: 5000
+
+    agoda_prices:
+      weekday: 3500
+      friday: 4000
+      saturday: 4500
+      sunday: 3500
+      holiday: 5000
+
+    booking_prices:
+      weekday: 3700 # Booking 可設不同價
+      friday: 4200
+      saturday: 4700
+      sunday: 3700
+      holiday: 5200
+
+  family_3beds:
+    name: "家庭房(3張床)"
+    agoda_room_id: "9900054"
+    booking_room_id: ""
+    base_inventory: 1
+
+    base_prices:
+      weekday: 4200
+      friday: 4800
+      saturday: 5500
+      sunday: 4200
+      holiday: 6000
+
+    agoda_prices:
+      weekday: 4200
+      friday: 4800
+      saturday: 5500
+      sunday: 4200
+      holiday: 6000
+
+    booking_prices:
+      weekday: 4400
+      friday: 5000
+      saturday: 5700
+      sunday: 4400
+      holiday: 6200
+
+# 假日清單
+holidays:
+  - "2026-01-01"
+  - "2026-01-28"
+  - "2026-01-29"
+  - "2026-01-30"
+  - "2026-01-31"
+  - "2026-02-01"
+  - "2026-02-28"
+  - "2026-04-04"
+  - "2026-05-01"
+  - "2026-06-08"
+  - "2026-09-21"
+  - "2026-10-10"
+
+# 物業資訊
+property:
+  agoda_property_id: "1615175"
+  booking_property_id: "" # TODO: 填入

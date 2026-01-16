@@ -1,0 +1,84 @@
+# 房型基準設定
+# 定義每個房型的「應該要有」的房數和價格
+# 系統會用這個基準來比對 OTA 上的實際狀況
+
+room_types:
+  # 房型 ID (自定義，用於程式內部對應)
+  standard_double:
+    name: "標準雙人房"
+    # 對應各平台的房型名稱 (因為每個平台可能命名不同)
+    platform_names:
+      agoda: "Standard Double Room"
+      booking: "標準雙人房"
+    # 基準庫存 (總共幾間)
+    base_inventory: 10
+    # 基準房價 (依照星期設定)
+    base_prices:
+      weekday: 2800 # 週一~週四
+      friday: 3200 # 週五
+      saturday: 3500 # 週六
+      sunday: 2800 # 週日
+      holiday: 3800 # 假日 (需另外設定假日清單)
+
+  deluxe_double:
+    name: "豪華雙人房"
+    platform_names:
+      agoda: "Deluxe Double Room"
+      booking: "豪華雙人房"
+    base_inventory: 8
+    base_prices:
+      weekday: 3500
+      friday: 4000
+      saturday: 4500
+      sunday: 3500
+      holiday: 5000
+
+  family_room:
+    name: "家庭房 (四人)"
+    platform_names:
+      agoda: "Family Room"
+      booking: "家庭四人房"
+    base_inventory: 5
+    base_prices:
+      weekday: 4200
+      friday: 4800
+      saturday: 5500
+      sunday: 4200
+      holiday: 6000
+
+  vip_suite:
+    name: "VIP 套房"
+    platform_names:
+      agoda: "VIP Suite"
+      booking: "VIP 豪華套房"
+    base_inventory: 2
+    base_prices:
+      weekday: 6500
+      friday: 7500
+      saturday: 8500
+      sunday: 6500
+      holiday: 9500
+
+# 假日清單 (YYYY-MM-DD 格式)
+holidays:
+  - "2026-01-01" # 元旦
+  - "2026-01-28" # 除夕
+  - "2026-01-29" # 春節初一
+  - "2026-01-30" # 春節初二
+  - "2026-01-31" # 春節初三
+  - "2026-02-01" # 春節初四
+  - "2026-02-28" # 228
+  - "2026-04-04" # 清明
+  - "2026-05-01" # 勞動節
+  - "2026-06-08" # 端午
+  - "2026-09-21" # 中秋
+  - "2026-10-10" # 國慶
+
+# 特殊日期價格調整 (覆蓋基準價)
+special_dates:
+  "2026-02-14": # 情人節
+    multiplier: 1.2 # 所有房型價格 x 1.2
+  "2026-12-24": # 平安夜
+    multiplier: 1.3
+  "2026-12-31": # 跨年
+    multiplier: 1.5

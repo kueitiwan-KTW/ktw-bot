@@ -1,0 +1,29 @@
+# FISH 庫存狀態
+# 實際基準值：三種房型各 1 間
+
+last_sync: "2026-01-16T00:53:00+08:00"
+
+rooms:
+  classic_double:
+    name: "經典雙人房"
+    total: 1 # 實際只有 1 間
+    sold: 0
+    available: 1
+    agoda_id: "9899987"
+    booking_id: ""
+
+  country_view_family:
+    name: "鄉村景家庭房(兩床)"
+    total: 1 # 實際只有 1 間
+    sold: 0
+    available: 1
+    agoda_id: "9900031"
+    booking_id: ""
+
+  family_3beds:
+    name: "家庭房(3張床)"
+    total: 1 # 實際只有 1 間
+    sold: 0
+    available: 1
+    agoda_id: "9900054"
+    booking_id: ""
