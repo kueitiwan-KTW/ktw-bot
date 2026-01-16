@@ -71,6 +71,155 @@ class BookingPlatform(BasePlatform):
             await self._playwright.stop()
         logger.info("Booking.com 瀏覽器已關閉")
     
+    async def check_session_valid(self) -> bool:
+        """
+        檢查 session 是否有效
+        
+        Returns:
+            True: session 有效，已登入
+            False: session 過期，需要重新登入
+        """
+        try:
+            # 訪問一個需要登入的頁面
+            await self.page.goto(self.BASE_URL)
+            await self.page.wait_for_load_state('networkidle')
+            await self.page.wait_for_timeout(2000)
+            
+            current_url = self.page.url
+            
+            # 如果被重定向到登入頁，則 session 過期
+            if 'sign-in' in current_url or 'account.booking.com' in current_url:
+                logger.warning("Booking.com session 已過期")
+                return False
+            
+            # 如果在管理頁面，則 session 有效
+            if 'extranet_ng' in current_url or 'hoteladmin' in current_url:
+                logger.info("Booking.com session 有效")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"檢查 session 失敗: {e}")
+            return False
+    
+    async def auto_login(self, email: str = None, password: str = None) -> bool:
+        """
+        自動登入 Booking.com
+        
+        Args:
+            email: 登入郵箱（可從環境變數讀取）
+            password: 登入密碼（可從環境變數讀取）
+        
+        Returns:
+            True: 登入成功
+            False: 登入失敗（可能需要 2FA 或其他原因）
+        """
+        import os
+        
+        email = email or os.getenv('BOOKING_EMAIL')
+        password = password or os.getenv('BOOKING_PASSWORD')
+        
+        if not email or not password:
+            logger.error("未設定 BOOKING_EMAIL 或 BOOKING_PASSWORD 環境變數")
+            return False
+        
+        try:
+            # 導航到登入頁
+            await self.page.goto('https://account.booking.com/sign-in')
+            await self.page.wait_for_load_state('networkidle')
+            await self.page.wait_for_timeout(2000)
+            
+            # 輸入郵箱
+            email_input = self.page.locator('input[type="email"], input[name="username"]').first
+            if await email_input.count() > 0:
+                await email_input.fill(email)
+                await self.page.wait_for_timeout(500)
+                
+                # 點擊繼續
+                continue_btn = self.page.locator('button[type="submit"], button:has-text("繼續")').first
+                if await continue_btn.count() > 0:
+                    await continue_btn.click()
+                    await self.page.wait_for_timeout(2000)
+            
+            # 輸入密碼
+            password_input = self.page.locator('input[type="password"]').first
+            if await password_input.count() > 0:
+                await password_input.fill(password)
+                await self.page.wait_for_timeout(500)
+                
+                # 點擊登入
+                login_btn = self.page.locator('button[type="submit"], button:has-text("登入")').first
+                if await login_btn.count() > 0:
+                    await login_btn.click()
+                    await self.page.wait_for_timeout(5000)
+            
+            # 檢查是否登入成功
+            current_url = self.page.url
+            
+            if 'extranet_ng' in current_url or 'hoteladmin' in current_url:
+                logger.info("Booking.com 自動登入成功")
+                return True
+            elif '2fa' in current_url or 'verify' in current_url:
+                logger.warning("Booking.com 需要 2FA 驗證，無法自動完成")
+                return False
+            else:
+                logger.warning(f"Booking.com 登入狀態不明: {current_url}")
+                return False
+            
+        except Exception as e:
+            logger.error(f"自動登入失敗: {e}")
+            return False
+    
+    async def ensure_logged_in(self) -> bool:
+        """
+        確保已登入（組合方法）
+        
+        1. 先檢查 session 是否有效
+        2. 如果過期，嘗試自動登入
+        
+        Returns:
+            True: 已登入（原本有效或自動登入成功）
+            False: 未登入（自動登入失敗）
+        """
+        if await self.check_session_valid():
+            return True
+        
+        logger.info("嘗試自動登入 Booking.com...")
+        return await self.auto_login()
+    
+    async def keep_alive(self) -> bool:
+        """
+        發送心跳保持 session 活躍
+        
+        建議每 4 小時執行一次
+        
+        Returns:
+            True: 心跳成功
+            False: session 可能已過期
+        """
+        try:
+            # 訪問日曆頁面刷新 session
+            await self.page.goto(self.get_calendar_url())
+            await self.page.wait_for_load_state('networkidle')
+            await self.page.wait_for_timeout(2000)
+            
+            current_url = self.page.url
+            
+            if 'calendar' in current_url:
+                logger.info("Booking.com Keep-Alive 成功")
+                return True
+            elif 'sign-in' in current_url:
+                logger.warning("Booking.com Keep-Alive 失敗，session 已過期")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Keep-Alive 失敗: {e}")
+            return False
+
+
     def get_calendar_url(self, lang: str = "xt") -> str:
         """取得日曆頁面 URL（繁體中文版）"""
         hotel_id = self.config.get("hotel_id", "2113583")
