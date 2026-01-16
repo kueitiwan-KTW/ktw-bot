@@ -198,11 +198,24 @@ class BookingPlatform(BasePlatform):
             True: 心跳成功
             False: session 可能已過期
         """
+        import random
+        
         try:
+            # 人類行為模擬：隨機延遲 1-5 秒
+            await self.page.wait_for_timeout(random.randint(1000, 5000))
+            
             # 訪問日曆頁面刷新 session
             await self.page.goto(self.get_calendar_url())
             await self.page.wait_for_load_state('networkidle')
-            await self.page.wait_for_timeout(2000)
+            
+            # 人類行為模擬：隨機等待 2-4 秒
+            await self.page.wait_for_timeout(random.randint(2000, 4000))
+            
+            # 人類行為模擬：隨機滾動頁面
+            await self.page.evaluate(f'''() => {{
+                window.scrollTo(0, {random.randint(100, 300)});
+            }}''')
+            await self.page.wait_for_timeout(random.randint(500, 1500))
             
             current_url = self.page.url
             

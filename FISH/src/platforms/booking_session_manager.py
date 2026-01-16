@@ -84,13 +84,19 @@ class BookingSessionManager:
         logger.info("Booking.com Session Manager 已停止")
     
     async def _keep_alive_loop(self):
-        """Keep-Alive 守護循環"""
-        logger.info(f"Keep-Alive daemon 已啟動，間隔: {self.keep_alive_interval}")
+        """Keep-Alive 守護循環（含隨機化）"""
+        import random
+        
+        base_interval = self.keep_alive_interval.total_seconds()
+        logger.info(f"Keep-Alive daemon 已啟動，基礎間隔: {self.keep_alive_interval}")
         
         while self._running:
             try:
-                # 等待到下次 Keep-Alive 時間
-                await asyncio.sleep(self.keep_alive_interval.total_seconds())
+                # 隨機化間隔：基礎時間 ± 30 分鐘
+                randomized_interval = base_interval + random.randint(-1800, 1800)
+                logger.info(f"下次 Keep-Alive 將在 {randomized_interval/3600:.1f} 小時後")
+                
+                await asyncio.sleep(randomized_interval)
                 
                 if not self._running:
                     break
@@ -101,7 +107,8 @@ class BookingSessionManager:
                 
                 if success:
                     self._last_keep_alive = datetime.now()
-                    logger.info(f"Keep-Alive 成功，下次: {datetime.now() + self.keep_alive_interval}")
+                    logger.info(f"Keep-Alive 成功")
+
                 else:
                     # Keep-Alive 失敗，嘗試重新登入
                     logger.warning("Keep-Alive 失敗，嘗試重新登入...")
