@@ -32,7 +32,145 @@ class AgodaPlatform(BasePlatform):
         super().__init__(config)
         self.property_id = config.get("property_id", "1615175")
     
+    async def check_session_valid(self) -> bool:
+        """
+        檢查 session 是否有效
+        
+        Returns:
+            True: session 有效，已登入
+            False: session 過期，需要重新登入
+        """
+        try:
+            await self.page.goto(self.BASE_URL)
+            await self.page.wait_for_load_state('networkidle')
+            await self.page.wait_for_timeout(2000)
+            
+            current_url = self.page.url
+            
+            # 如果被重定向到登入頁
+            if 'login' in current_url or 'signin' in current_url or 'auth' in current_url:
+                logger.warning("Agoda YCS session 已過期")
+                return False
+            
+            # 如果在 YCS 管理頁面
+            if 'ycs.agoda.com' in current_url:
+                logger.info("Agoda YCS session 有效")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"檢查 session 失敗: {e}")
+            return False
+    
+    async def auto_login(self, email: str = None, password: str = None) -> bool:
+        """
+        自動登入 Agoda YCS
+        
+        Args:
+            email: 登入郵箱（可從環境變數讀取）
+            password: 登入密碼（可從環境變數讀取）
+        
+        Returns:
+            True: 登入成功
+            False: 登入失敗
+        """
+        import os
+        
+        email = email or os.getenv('AGODA_EMAIL')
+        password = password or os.getenv('AGODA_PASSWORD')
+        
+        if not email or not password:
+            logger.error("未設定 AGODA_EMAIL 或 AGODA_PASSWORD 環境變數")
+            return False
+        
+        try:
+            await self.page.goto('https://ycs.agoda.com/login')
+            await self.page.wait_for_load_state('networkidle')
+            await self.page.wait_for_timeout(2000)
+            
+            # 輸入郵箱
+            email_input = self.page.locator('input[type="email"], input[name="email"]').first
+            if await email_input.count() > 0:
+                await email_input.fill(email)
+                await self.page.wait_for_timeout(500)
+            
+            # 輸入密碼
+            password_input = self.page.locator('input[type="password"]').first
+            if await password_input.count() > 0:
+                await password_input.fill(password)
+                await self.page.wait_for_timeout(500)
+            
+            # 點擊登入
+            login_btn = self.page.locator('button[type="submit"]').first
+            if await login_btn.count() > 0:
+                await login_btn.click()
+                await self.page.wait_for_timeout(5000)
+            
+            # 檢查是否登入成功
+            current_url = self.page.url
+            
+            if 'ycs.agoda.com' in current_url and 'login' not in current_url:
+                logger.info("Agoda YCS 自動登入成功")
+                return True
+            else:
+                logger.warning(f"Agoda YCS 登入狀態不明: {current_url}")
+                return False
+            
+        except Exception as e:
+            logger.error(f"自動登入失敗: {e}")
+            return False
+    
+    async def ensure_logged_in(self) -> bool:
+        """確保已登入"""
+        if await self.check_session_valid():
+            return True
+        
+        logger.info("嘗試自動登入 Agoda YCS...")
+        return await self.auto_login()
+    
+    async def keep_alive(self) -> bool:
+        """
+        發送心跳保持 session 活躍（含人類行為模擬）
+        
+        建議每 4 小時執行一次
+        """
+        import random
+        
+        try:
+            # 人類行為模擬：隨機延遲 1-5 秒
+            await self.page.wait_for_timeout(random.randint(1000, 5000))
+            
+            # 訪問日曆頁面刷新 session
+            await self.page.goto(self.get_calendar_url())
+            await self.page.wait_for_load_state('networkidle')
+            
+            # 人類行為模擬：隨機等待 2-4 秒
+            await self.page.wait_for_timeout(random.randint(2000, 4000))
+            
+            # 人類行為模擬：隨機滾動頁面
+            await self.page.evaluate(f'''() => {{
+                window.scrollTo(0, {random.randint(100, 300)});
+            }}''')
+            await self.page.wait_for_timeout(random.randint(500, 1500))
+            
+            current_url = self.page.url
+            
+            if 'calendar' in current_url:
+                logger.info("Agoda YCS Keep-Alive 成功")
+                return True
+            elif 'login' in current_url:
+                logger.warning("Agoda YCS Keep-Alive 失敗，session 已過期")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Keep-Alive 失敗: {e}")
+            return False
+
     def get_calendar_url(self) -> str:
+
         """取得日曆頁面 URL"""
         return f"{self.BASE_URL}/mldc/zh-tw/app/ari/calendar/{self.property_id}"
     
