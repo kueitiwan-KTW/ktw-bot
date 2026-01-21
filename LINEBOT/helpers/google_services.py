@@ -42,11 +42,27 @@ class GoogleServices:
             if not self.creds:
                 if not os.path.exists(creds_path):
                     print(f"❌ Error: credentials.json not found at {creds_path}!")
+                    print("⚠️ GoogleServices 將以降級模式運行（Gmail/Drive 功能不可用）")
                     return
 
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    creds_path, SCOPES)
-                self.creds = flow.run_local_server(port=0)
+                # 🔧 修復：在無 GUI 環境下跳過 OAuth，避免 Bot 卡住
+                try:
+                    import sys
+                    # 檢查是否在 headless 環境（無 GUI）
+                    if not sys.stdin.isatty():
+                        print("⚠️ 偵測到 headless 環境，跳過 OAuth 授權")
+                        print("⚠️ GoogleServices 將以降級模式運行（Gmail/Drive 功能不可用）")
+                        print("💡 若需啟用 Gmail 功能，請在有 GUI 的終端機手動執行：")
+                        print(f"   cd ~/ktw-projects/ktw-bot/LINEBOT && python3 helpers/google_services.py")
+                        return
+                    
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        creds_path, SCOPES)
+                    self.creds = flow.run_local_server(port=0)
+                except Exception as e:
+                    print(f"⚠️ OAuth 授權失敗: {e}")
+                    print("⚠️ GoogleServices 將以降級模式運行（Gmail/Drive 功能不可用）")
+                    return
             
             # Save the credentials for the next run
             with open(token_path, 'w') as token:
@@ -55,12 +71,21 @@ class GoogleServices:
         print("✅ Google Services Authenticated Successfully!")
 
     def get_gmail_service(self):
+        if not self.creds:
+            print("⚠️ Gmail service 不可用（未授權）")
+            return None
         return build('gmail', 'v1', credentials=self.creds)
 
     def get_drive_service(self):
+        if not self.creds:
+            print("⚠️ Drive service 不可用（未授權）")
+            return None
         return build('drive', 'v3', credentials=self.creds)
 
     def get_sheets_service(self):
+        if not self.creds:
+            print("⚠️ Sheets service 不可用（未授權）")
+            return None
         return build('sheets', 'v4', credentials=self.creds)
 
 if __name__ == "__main__":

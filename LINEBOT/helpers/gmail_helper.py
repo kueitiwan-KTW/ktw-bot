@@ -1,8 +1,13 @@
 import base64
 import re
+
+
 class GmailHelper:
     def __init__(self, google_services):
         self.service = google_services.get_gmail_service()
+        self.available = self.service is not None
+        if not self.available:
+            print("⚠️ GmailHelper 以降級模式運行（Gmail 查詢功能不可用）")
 
     def search_order(self, order_id):
         """
@@ -11,6 +16,11 @@ class GmailHelper:
         
         New Feature: Deep Scan for Substring Matches (e.g. searching "56645" inside "1675664593")
         """
+        # 🔧 降級模式檢查
+        if not self.available:
+            print(f"⚠️ Gmail 查詢略過 (service 不可用)")
+            return None
+        
         print(f"Searching for Order ID: {order_id}")
         
         # --- 隱私攔截碼 (Privacy Guard) ---
