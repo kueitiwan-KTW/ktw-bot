@@ -16,11 +16,13 @@ body {
 #app {
   display: flex;
   min-height: 100vh;
+  width: 100%;
 }
 
 /* 側邊欄 */
 .sidebar {
   width: 250px;
+  flex-shrink: 0;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -149,9 +151,10 @@ body {
 /* 主內容區 */
 .main-content {
   flex: 1;
+  min-width: 0;
   padding: 30px;
-  overflow: hidden;
-  /* 完全隱藏捲軸 */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 全域隱藏捲軸 */
