@@ -82,6 +82,16 @@ const widgets = ref([
     visible: true,
     collapsed: false,
   },
+  {
+    id: "ai-needs",
+    title: "🤖 AI 需求速覽",
+    x: 0,
+    y: 14,
+    w: 12,
+    h: 4,
+    visible: true,
+    collapsed: false,
+  },
 ]);
 
 // 分頁配置：昨、今、明 + 未來 5 天
@@ -171,6 +181,20 @@ function sortGuestsByStatus(guests) {
     const priorityB = STATUS_PRIORITY[b.status_code] ?? 99;
     return priorityA - priorityB;
   });
+}
+
+// ============================================
+// AI 需求速覽（複用 guestTabs 資料）
+// ============================================
+const activeAiNeedsOffset = ref(0); // 獨立 Tab 狀態
+
+// 從既有 guestTabs 過濾有 AI 需求的訂單
+function getAiNeedsGuests(offset) {
+  const tab = guestTabs[offset.toString()];
+  if (!tab) return [];
+  return tab.data.filter(g =>
+    g.special_request_from_bot || g.customer_remarks || g.staff_memo
+  );
 }
 
 // 展開狀態管理（使用數組儲存已展開的卡片 ID）
@@ -1412,6 +1436,90 @@ const statusIcons = {
                         toggleCardExpand(cfg.offset + '-' + g.booking_id)
                       "
                     />
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 需求速覽 -->
+        <div
+          v-if="widgets[7].visible"
+          class="grid-stack-item"
+          :class="{ collapsed: widgets[7].collapsed }"
+          gs-id="ai-needs"
+          gs-x="0"
+          gs-y="14"
+          gs-w="100"
+          gs-h="5"
+          gs-min-w="12"
+          gs-min-h="3"
+        >
+          <div class="grid-stack-item-content ai-needs-panel">
+            <div class="panel-header">
+              <div class="widget-handle"></div>
+              <h3>🤖 AI 需求速覽</h3>
+              <div class="guest-tabs">
+                <button
+                  v-for="cfg in GUEST_TABS_CONFIG"
+                  :key="'ai-tab-' + cfg.offset"
+                  :class="{ active: activeAiNeedsOffset === cfg.offset }"
+                  @click="activeAiNeedsOffset = cfg.offset"
+                  class="guest-tab-btn"
+                >
+                  {{ getTabLabel(cfg) }}
+                  <span class="tab-count">({{ getAiNeedsGuests(cfg.offset).length }})</span>
+                </button>
+              </div>
+              <button class="collapse-btn" @click="toggleCollapse(7)">
+                {{ widgets[7].collapsed ? "▼" : "▲" }}
+              </button>
+            </div>
+            <div v-show="!widgets[7].collapsed" class="panel-body">
+              <template
+                v-for="cfg in GUEST_TABS_CONFIG"
+                :key="'ai-content-' + cfg.offset"
+              >
+                <div v-if="activeAiNeedsOffset === cfg.offset">
+                  <div
+                    v-if="guestTabs[cfg.offset.toString()]?.loading"
+                    class="loading-text"
+                  >
+                    載入中...
+                  </div>
+                  <div
+                    v-else-if="getAiNeedsGuests(cfg.offset).length === 0"
+                    class="empty-text"
+                  >
+                    ✅ {{ getTabLabel(cfg) }}無特殊需求
+                  </div>
+                  <div v-else class="ai-needs-list">
+                    <div
+                      v-for="g in getAiNeedsGuests(cfg.offset)"
+                      :key="'ai-' + cfg.offset + '-' + g.booking_id"
+                      class="ai-needs-item"
+                    >
+                      <div class="ai-needs-room">
+                        <span class="ai-room-tag">{{ g.room_numbers?.join(', ') || '未排房' }}</span>
+                        <span class="ai-guest-name">{{ g.guest_name }}</span>
+                        <span class="ai-status-badge" :class="'status-' + g.status_code">{{ g.status_name }}</span>
+                      </div>
+                      <div class="ai-needs-details">
+                        <div v-if="g.special_request_from_bot" class="ai-need-row">
+                          <span class="ai-need-tag bot">🤖 AI</span>
+                          <span class="ai-need-text">{{ g.special_request_from_bot }}</span>
+                        </div>
+                        <div v-if="g.customer_remarks" class="ai-need-row">
+                          <span class="ai-need-tag pms">📋 PMS</span>
+                          <span class="ai-need-text">{{ g.customer_remarks }}</span>
+                        </div>
+                        <div v-if="g.staff_memo" class="ai-need-row">
+                          <span class="ai-need-tag memo">📝 櫃檯</span>
+                          <span class="ai-need-text">{{ g.staff_memo }}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>

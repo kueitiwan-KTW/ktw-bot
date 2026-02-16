@@ -1981,3 +1981,124 @@ body {
   font-size: 0.75rem;
   opacity: 0.8;
 }
+
+/* ============================================
+   AI 需求速覽面板
+   ============================================ */
+.ai-needs-panel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.ai-needs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-needs-item {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: all 0.2s ease;
+}
+
+.ai-needs-item:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(0, 212, 255, 0.2);
+}
+
+.ai-needs-room {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ai-room-tag {
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+  color: white;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 4px 12px;
+  border-radius: 8px;
+  min-width: 50px;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.ai-guest-name {
+  font-size: 0.9rem;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.ai-status-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.ai-status-badge.status-N {
+  background: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
+}
+
+.ai-status-badge.status-R {
+  background: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+}
+
+.ai-status-badge.status-I {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.ai-needs-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.ai-need-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ai-need-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ai-need-tag.bot {
+  background: rgba(49, 130, 206, 0.2);
+  color: #63b3ed;
+}
+
+.ai-need-tag.pms {
+  background: rgba(237, 137, 54, 0.2);
+  color: #ed8936;
+}
+
+.ai-need-tag.memo {
+  background: rgba(72, 187, 120, 0.2);
+  color: #48bb78;
+}
+
+.ai-need-text {
+  font-size: 0.88rem;
+  color: #e0e0e0;
+  line-height: 1.4;
+  word-break: break-word;
+}
