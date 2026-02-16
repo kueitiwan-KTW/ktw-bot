@@ -2040,6 +2040,12 @@ body {
   font-weight: 500;
 }
 
+.ai-line-name {
+  font-size: 0.8rem;
+  color: #06c755;
+  margin-left: 4px;
+}
+
 .ai-status-badge {
   font-size: 0.75rem;
   padding: 2px 8px;

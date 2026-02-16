@@ -1503,6 +1503,7 @@ const statusIcons = {
                       <div class="ai-needs-room">
                         <span class="ai-room-tag">{{ g.room_numbers?.join(', ') || '未排房' }}</span>
                         <span class="ai-guest-name">{{ g.guest_name }}</span>
+                        <span v-if="g.line_display_name" class="ai-line-name">({{ g.line_display_name }})</span>
                         <span class="ai-status-badge" :class="'status-' + g.status_code">{{ g.status_name }}</span>
                       </div>
                       <div class="ai-needs-details">
