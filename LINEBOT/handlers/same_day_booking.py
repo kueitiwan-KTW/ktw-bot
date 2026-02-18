@@ -1717,15 +1717,24 @@ class SameDayBookingHandler:
         
         result = []
         
-        # 房型對照表
+        # 房型對照表（不含價格，價格由 API 動態回傳）
         room_mapping = {
-            '雙人': {'code': 'SD', 'name': '標準雙人房', 'price': 2280},
-            '三人': {'code': 'ST', 'name': '標準三人房', 'price': 2880},
-            '四人': {'code': 'SQ', 'name': '標準四人房', 'price': 3680},
-            '標準雙人': {'code': 'SD', 'name': '標準雙人房', 'price': 2280},
-            '標準三人': {'code': 'ST', 'name': '標準三人房', 'price': 2880},
-            '標準四人': {'code': 'SQ', 'name': '標準四人房', 'price': 3680},
+            '雙人': {'code': 'SD', 'name': '標準雙人房'},
+            '三人': {'code': 'ST', 'name': '標準三人房'},
+            '四人': {'code': 'SQ', 'name': '標準四人房'},
+            '標準雙人': {'code': 'SD', 'name': '標準雙人房'},
+            '標準三人': {'code': 'ST', 'name': '標準三人房'},
+            '標準四人': {'code': 'SQ', 'name': '標準四人房'},
         }
+        
+        # 從 Bot 的 today_availability 快取取得動態價格
+        price_cache = {}
+        try:
+            if hasattr(self, 'bot') and hasattr(self.bot, 'last_availability'):
+                for room_data in self.bot.last_availability.get('rooms', []):
+                    price_cache[room_data.get('code')] = room_data.get('price', 0)
+        except Exception:
+            pass
         
         # 解析格式：「2間雙人房」「雙人房 x 2」「1雙人1三人」
         patterns = [
@@ -1745,6 +1754,8 @@ class SameDayBookingHandler:
                     if room_type in room_mapping:
                         room_info = room_mapping[room_type].copy()
                         room_info['count'] = count
+                        # 使用動態價格，若無快取則為 0（後續由確認流程補齊）
+                        room_info['price'] = price_cache.get(room_info['code'], 0)
                         result.append(room_info)
         
         return result if result else None

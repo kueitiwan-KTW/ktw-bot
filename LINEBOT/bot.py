@@ -300,44 +300,60 @@ class HotelBot:
             }
         
         available_rooms = result.get('data', {}).get('available_room_types', [])
+        day_type_name = result.get('data', {}).get('day_type_name', '平日')
         
-        # 只顯示標準房型
+        # 房型靜態資訊（不含價格，價格由 API 動態回傳）
         standard_rooms = []
-        room_mapping = {
-            'SD': {'name': '標準雙人房', 'price': 2280, 'capacity': 2, 'beds': ['一大床', '兩小床']},
-            'ST': {'name': '標準三人房', 'price': 2880, 'capacity': 3, 'beds': ['一大一小', '三小床']},
-            'SQ': {'name': '標準四人房', 'price': 3680, 'capacity': 4, 'beds': ['兩大床', '四小床']}
+        room_info_map = {
+            'SD': {'name': '標準雙人房', 'capacity': 2, 'beds': ['一大床', '兩小床']},
+            'ST': {'name': '標準三人房', 'capacity': 3, 'beds': ['一大一小', '三小床']},
+            'SQ': {'name': '標準四人房', 'capacity': 4, 'beds': ['兩大床', '四小床']}
         }
         
         for room in available_rooms:
             code = room.get('room_type_code')
-            if code in room_mapping:
-                info = room_mapping[code]
+            if code in room_info_map:
+                info = room_info_map[code]
+                # 價格使用 API 回傳的動態價格（含當日加價）
+                price = room.get('price', 0)
                 standard_rooms.append({
                     'code': code,
                     'name': info['name'],
-                    'price': info['price'],
+                    'price': price,
+                    'base_price': room.get('base_price', price),
+                    'surcharge': room.get('surcharge', 0),
                     'available': room.get('available_count', 0),
                     'bed_options': info['beds']
                 })
         
-        return {
+        # 動態組裝房價展示文字
+        price_lines = []
+        for r in standard_rooms:
+            price_text = f"NT${r['price']:,}/晚（含早餐）"
+            if r['surcharge'] > 0:
+                price_text += f"（含{day_type_name}加價 NT${r['surcharge']:,}）"
+            price_lines.append(f"• {r['name']} - {price_text}")
+        price_display = "\n".join(price_lines) if price_lines else "（查詢中...）"
+        # 儲存查詢結果供 same_day_booking 的 _parse_rooms_for_ai 使用
+        availability_result = {
             "status": "success",
             "date": result.get('data', {}).get('date'),
+            "day_type": result.get('data', {}).get('day_type', 'N'),
+            "day_type_name": day_type_name,
             "rooms": standard_rooms,
-            "instructions": """
+            "instructions": f"""
 請用以下格式向客人展示房況，並詢問想預訂的房型：
 
-📋 今日可預訂房型：
-• 標準雙人房 - NT$2,280/晚（含早餐）
-• 標準三人房 - NT$2,880/晚（含早餐）
-• 標準四人房 - NT$3,680/晚（含早餐）
+📋 今日可預訂房型（{day_type_name}）：
+{price_display}
 
 客人可以說：
 - 直接說房型：「雙人房」、「四人房」
 - 說數量：「兩間雙人」、「1間四人1間雙人」
 """
         }
+        self.last_availability = availability_result
+        return availability_result
 
     def create_same_day_booking(
         self,

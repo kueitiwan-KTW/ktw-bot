@@ -87,6 +87,13 @@ router.get('/availability', async (req, res) => {
  * GET /api/rooms/today-availability
  * 查詢今日可預訂房型（當日預訂專用）
  * 使用 WRS_STOCK_DT（網路庫存）和 RMINV_MN（館內庫存）
+ * 
+ * ⚠️ 僅限「當日可訂房價」查詢，已訂訂單價格必須 100% 依據訂單內容
+ * 
+ * 房價計算：ratecod_dt 基準價（含早）+ 日類型對應加價
+ * - 日類型來源：holiday_rf (BATCH_DAT → DAY_STA)
+ * - 加價映射：service_rf (COMMAND_OPTION = 'H' + DAY_STA → ITEM_NOS)
+ * - 加價金額：service_dt (KEY + ROOM_COD + SERV_COD → ITEM_AMT)
  */
 router.get('/today-availability', async (req, res) => {
     try {
@@ -100,8 +107,25 @@ router.get('/today-availability', async (req, res) => {
             `);
             const today = dateResult.rows[0][0];
 
-            // 查詢 WRS_STOCK_DT（網路庫存）、RMINV_MN（館內庫存）
-            // 價格優先使用 WRS_ROOM_PRICE（按日期價格），若無則使用 RATECOD_DT（web001 固定價）
+            // 步驟 1：查詢今日日類型
+            const dayTypeResult = await connection.execute(`
+                SELECT TRIM(DAY_STA) as day_sta
+                FROM GDWUUKT.HOLIDAY_RF
+                WHERE TRUNC(BATCH_DAT) = TO_DATE(:today, 'YYYY-MM-DD')
+            `, { today });
+            
+            const dayType = dayTypeResult.rows.length > 0 ? dayTypeResult.rows[0][0] : 'N';
+
+            // 日類型名稱對照
+            const dayTypeNames = {
+                'N': '平日', 'D': '旺日', 'H': '假日',
+                'S': '旺季', 'T': '緊迫日', 'W': '旺季假日'
+            };
+            const dayTypeName = dayTypeNames[dayType] || '平日';
+
+            // 步驟 2：查詢庫存 + 基準價 + 加價金額（單一 SQL）
+            // 基準價：ratecod_dt (web001)
+            // 加價：service_dt 透過 service_rf.COMMAND_OPTION 映射日類型
             const result = await connection.execute(`
                 SELECT 
                     TRIM(w.ROOM_COD) as room_type_code,
@@ -111,24 +135,30 @@ router.get('/today-availability', async (req, res) => {
                     (w.STOCK_QNT - w.USE_QNT) as web_available,
                     NVL(r.LEFT_QNT, 0) as local_stock,
                     NVL(r.ROOM_QNT, 0) as total_rooms,
-                    COALESCE(p.PAY_TOT, p2.RENT_AMT, 0) as price
+                    NVL(p2.RENT_AMT, 0) as base_price,
+                    NVL(sd.ITEM_AMT, 0) as surcharge
                 FROM GDWUUKT.WRS_STOCK_DT w
                 LEFT JOIN GDWUUKT.RMINV_MN r 
                     ON TRIM(w.ROOM_COD) = TRIM(r.ROOM_COD) 
                     AND TRUNC(w.BATCH_DAT) = TRUNC(r.BATCH_DAT)
                 LEFT JOIN GDWUUKT.ROOM_RF rf 
                     ON TRIM(w.ROOM_COD) = TRIM(rf.ROOM_TYP)
-                LEFT JOIN GDWUUKT.WRS_ROOM_PRICE p
-                    ON TRIM(w.ROOM_COD) = TRIM(p.ROOM_COD)
-                    AND TRUNC(p.CI_DAT) = TO_DATE(:today, 'YYYY-MM-DD')
-                    AND p.DAYS = 1
-                    AND TRIM(p.PRODUCT_NOS) = '20001901'
                 LEFT JOIN GDWUUKT.RATECOD_DT p2
                     ON TRIM(w.ROOM_COD) = TRIM(p2.ROOM_COD)
                     AND p2.KEY IN (SELECT KEY FROM GDWUUKT.RATECOD_MN WHERE TRIM(RATE_COD) = 'web001')
+                LEFT JOIN GDWUUKT.SERVICE_DT sd
+                    ON TRIM(w.ROOM_COD) = TRIM(sd.ROOM_COD)
+                    AND sd.KEY IN (SELECT KEY FROM GDWUUKT.RATECOD_MN WHERE TRIM(RATE_COD) = 'web001')
+                    AND TRIM(sd.SERV_COD) IN (
+                        SELECT TRIM(ITEM_NOS) FROM GDWUUKT.SERVICE_RF 
+                        WHERE TRIM(COMMAND_OPTION) = :cmd_option
+                    )
                 WHERE TRUNC(w.BATCH_DAT) = TO_DATE(:today, 'YYYY-MM-DD')
                 ORDER BY w.ROOM_COD
-            `, { today });
+            `, { 
+                today,
+                cmd_option: dayType === 'N' ? 'NONE' : ('H' + dayType)
+            });
 
             // 過濾出有網路庫存或館內庫存的房型
             const availableRoomTypes = result.rows
@@ -137,14 +167,22 @@ router.get('/today-availability', async (req, res) => {
                     const localStock = row[5] || 0;    // local_stock
                     return webAvailable > 0 || localStock > 0;
                 })
-                .map(row => ({
-                    room_type_code: row[0],
-                    room_type_name: row[1] || row[0],
-                    web_available: row[4] || 0,    // 網路可訂
-                    local_stock: row[5] || 0,      // 館內庫存
-                    available_count: (row[4] || 0) + (row[5] || 0),  // 總可用
-                    price: row[7] || 0             // 官網優惠價
-                }));
+                .map(row => {
+                    const basePrice = row[7] || 0;
+                    const surcharge = row[8] || 0;
+                    return {
+                        room_type_code: row[0],
+                        room_type_name: row[1] || row[0],
+                        web_available: row[4] || 0,
+                        local_stock: row[5] || 0,
+                        available_count: (row[4] || 0) + (row[5] || 0),
+                        price: basePrice + surcharge,       // 總價（基準 + 加價）
+                        base_price: basePrice,              // 基準價（含早）
+                        surcharge: surcharge,               // 日類型加價
+                        day_type: dayType,                  // 日類型代碼
+                        day_type_name: dayTypeName           // 日類型名稱
+                    };
+                });
 
             // 計算總數
             const totalWebAvailable = availableRoomTypes.reduce((sum, r) => sum + r.web_available, 0);
@@ -154,6 +192,8 @@ router.get('/today-availability', async (req, res) => {
                 success: true,
                 data: {
                     date: today,
+                    day_type: dayType,
+                    day_type_name: dayTypeName,
                     available_room_types: availableRoomTypes,
                     summary: {
                         web_available: totalWebAvailable,
