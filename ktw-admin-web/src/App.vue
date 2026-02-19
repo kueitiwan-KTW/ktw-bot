@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, reactive } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick, reactive, watch } from "vue";
 import { GridStack } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import GuestCard from "./components/GuestCard.vue";
@@ -287,6 +287,8 @@ async function syncReply() {
       if (result.success) {
         syncReplyStatus.value = 'success';
         syncReplyMessage.value = '';
+        // 重新載入歷史紀錄
+        fetchSyncHistory(selectedUserId.value);
         // 3 秒後清除成功狀態
         setTimeout(() => { syncReplyStatus.value = null; }, 3000);
       } else {
@@ -318,6 +320,35 @@ function formatLastActivity(isoString) {
 const selectedUserName = computed(() => {
   const user = chatUsers.value.find(u => u.user_id === selectedUserId.value);
   return user?.display_name || '';
+});
+
+// 同步回覆歷史紀錄
+const syncHistory = ref([]);
+const syncHistoryLoading = ref(false);
+
+async function fetchSyncHistory(userId) {
+  if (!userId) { syncHistory.value = []; return; }
+  syncHistoryLoading.value = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/sync-history/${userId}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        syncHistory.value = result.data || [];
+      }
+    }
+  } catch (error) {
+    console.error('取得同步歷史失敗:', error);
+  } finally {
+    syncHistoryLoading.value = false;
+  }
+}
+
+// 選中客人時自動載入歷史
+watch(selectedUserId, (newId) => {
+  fetchSyncHistory(newId);
 });
 
 // ============================================
@@ -1661,6 +1692,18 @@ const statusIcons = {
                 </button>
                 <span v-if="syncReplyStatus === 'success'" class="sync-success">✅ 已記錄，AI 下次對話能看到</span>
                 <span v-if="syncReplyStatus === 'error'" class="sync-error">❌ 記錄失敗</span>
+              </div>
+              <!-- 歷史紀錄 -->
+              <div class="sync-history">
+                <div class="sync-history-title">📋 已記錄的回覆</div>
+                <div v-if="syncHistoryLoading" class="empty-text">載入中...</div>
+                <div v-else-if="syncHistory.length === 0" class="sync-history-empty">尚無手動回覆紀錄</div>
+                <div v-else class="sync-history-list">
+                  <div v-for="(h, i) in syncHistory" :key="i" class="sync-history-item">
+                    <div class="sync-history-time">{{ h.timestamp }}</div>
+                    <div class="sync-history-msg">{{ h.message }}</div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="sync-reply-hint" v-else>

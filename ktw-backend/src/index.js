@@ -1178,6 +1178,41 @@ app.post('/api/chat/sync-reply', (req, res) => {
     }
 });
 
+// 取得特定客人的手動回覆歷史
+app.get('/api/chat/sync-history/:user_id', (req, res) => {
+    try {
+        const { user_id } = req.params;
+        const logPath = join(CHAT_LOGS_DIR, `${user_id}.txt`);
+        
+        if (!existsSync(logPath)) {
+            return res.json({ success: true, data: [] });
+        }
+        
+        const content = readFileSync(logPath, 'utf-8');
+        const entries = [];
+        
+        // 解析日誌，找出管理員手動回覆的條目
+        const blocks = content.split(/^-{20,}$/m);
+        for (const block of blocks) {
+            const match = block.match(/\[(.+?)\]\s*【管理員\(手動回覆\)】\n([\s\S]*)/);
+            if (match) {
+                entries.push({
+                    timestamp: match[1].trim(),
+                    message: match[2].trim(),
+                });
+            }
+        }
+        
+        // 最新的在前面
+        entries.reverse();
+        
+        res.json({ success: true, data: entries });
+    } catch (error) {
+        console.error('取得同步歷史失敗:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // ============================================
 // 即時推送 API (給 Bot 呼叫)
 // ============================================
