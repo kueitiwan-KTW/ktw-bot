@@ -280,6 +280,7 @@ async function syncReply() {
       body: JSON.stringify({
         user_id: selectedUserId.value,
         message: syncReplyMessage.value.trim(),
+        send_line: true,
       }),
     });
     if (res.ok) {
@@ -1688,10 +1689,10 @@ const statusIcons = {
                   :disabled="!syncReplyMessage.trim() || syncReplyStatus === 'sending'"
                   @click="syncReply"
                 >
-                  {{ syncReplyStatus === 'sending' ? '記錄中...' : '📝 記錄回覆' }}
+                  {{ syncReplyStatus === 'sending' ? '發送中...' : '� 發送並記錄' }}
                 </button>
-                <span v-if="syncReplyStatus === 'success'" class="sync-success">✅ 已記錄，AI 下次對話能看到</span>
-                <span v-if="syncReplyStatus === 'error'" class="sync-error">❌ 記錄失敗</span>
+                <span v-if="syncReplyStatus === 'success'" class="sync-success">✅ 已發送給客人並記錄，AI 下次對話能看到</span>
+                <span v-if="syncReplyStatus === 'error'" class="sync-error">❌ 發送失敗</span>
               </div>
               <!-- 歷史紀錄 -->
               <div class="sync-history">

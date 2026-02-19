@@ -1133,16 +1133,43 @@ app.get('/api/chat/users', (req, res) => {
     }
 });
 
-// 同步管理員手動回覆到客人的對話日誌
-app.post('/api/chat/sync-reply', (req, res) => {
+// 同步管理員手動回覆到客人的對話日誌（可選同時 LINE Push 發送）
+const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+app.post('/api/chat/sync-reply', async (req, res) => {
     try {
-        const { user_id, message } = req.body;
+        const { user_id, message, send_line } = req.body;
         
         if (!user_id || !message) {
             return res.status(400).json({ 
                 success: false, 
                 error: '缺少必要欄位: user_id, message' 
             });
+        }
+        
+        // 如果要同時 LINE Push 發送
+        let lineSent = false;
+        if (send_line && LINE_CHANNEL_ACCESS_TOKEN) {
+            try {
+                const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+                    },
+                    body: JSON.stringify({
+                        to: user_id,
+                        messages: [{ type: 'text', text: message }],
+                    }),
+                });
+                lineSent = pushRes.ok;
+                if (!pushRes.ok) {
+                    const errBody = await pushRes.text();
+                    console.error('LINE Push 失敗:', pushRes.status, errBody);
+                }
+            } catch (lineErr) {
+                console.error('LINE Push 錯誤:', lineErr.message);
+            }
         }
         
         // 寫入該用戶的對話日誌（格式與 ChatLogger.log() 一致）
@@ -1153,7 +1180,8 @@ app.post('/api/chat/sync-reply', (req, res) => {
             hour12: false
         });
         
-        const logEntry = `[${timestamp}] 【管理員(手動回覆)】\n${message}\n${'-'.repeat(30)}\n`;
+        const label = send_line && lineSent ? '管理員(手動回覆+已發送)' : '管理員(手動回覆)';
+        const logEntry = `[${timestamp}] 【${label}】\n${message}\n${'-'.repeat(30)}\n`;
         const logPath = join(CHAT_LOGS_DIR, `${user_id}.txt`);
         
         appendFileSync(logPath, logEntry, 'utf-8');
@@ -1165,12 +1193,16 @@ app.post('/api/chat/sync-reply', (req, res) => {
             ? (typeof profile === 'string' ? profile : profile.display_name) 
             : user_id;
         
-        console.log(`📝 手動回覆同步：管理員 → ${displayName}(${user_id}): ${message.slice(0, 50)}...`);
+        const action = send_line && lineSent ? '發送+記錄' : '記錄';
+        console.log(`📝 手動回覆${action}：管理員 → ${displayName}(${user_id}): ${message.slice(0, 50)}...`);
         
         res.json({ 
             success: true, 
-            message: `已記錄回覆給 ${displayName}`,
-            display_name: displayName
+            message: send_line && lineSent 
+                ? `已發送並記錄回覆給 ${displayName}` 
+                : `已記錄回覆給 ${displayName}`,
+            display_name: displayName,
+            line_sent: lineSent,
         });
     } catch (error) {
         console.error('同步回覆失敗:', error);
