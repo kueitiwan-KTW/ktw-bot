@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync, appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -1080,6 +1080,100 @@ app.post('/api/user-orders', async (req, res) => {
         res.json({ success: true, message: '用戶訂單關聯已儲存', data: result });
     } catch (error) {
         console.error('儲存用戶訂單關聯失敗:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// 聊天同步回覆 API（讓管理員在 Vue 後台同步手動回覆）
+// ============================================
+
+
+
+// Bot 的 chat_logs 目錄路徑
+const CHAT_LOGS_DIR = join(__dirname, '../../data/chat_logs');
+
+// 取得客人列表（按最新對話時間排序）
+app.get('/api/chat/users', (req, res) => {
+    try {
+        const profiles = getUserProfiles();
+        
+        // 讀取所有 .txt 日誌檔，取得最後修改時間
+        const logFiles = readdirSync(CHAT_LOGS_DIR)
+            .filter(f => f.endsWith('.txt') && !f.startsWith('_'));
+        
+        const users = logFiles.map(f => {
+            const userId = f.replace('.txt', '');
+            const filePath = join(CHAT_LOGS_DIR, f);
+            const fileStat = statSync(filePath);
+            
+            // 從 profiles 取得顯示名稱
+            const profile = profiles[userId];
+            let displayName = '未知用戶';
+            if (profile) {
+                displayName = typeof profile === 'string' 
+                    ? profile 
+                    : profile.display_name || '未知用戶';
+            }
+            
+            return {
+                user_id: userId,
+                display_name: displayName,
+                last_activity: fileStat.mtime.toISOString()
+            };
+        });
+        
+        // 按最新對話時間排序（最新的在前面）
+        users.sort((a, b) => new Date(b.last_activity) - new Date(a.last_activity));
+        
+        res.json({ success: true, data: users });
+    } catch (error) {
+        console.error('取得客人列表失敗:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 同步管理員手動回覆到客人的對話日誌
+app.post('/api/chat/sync-reply', (req, res) => {
+    try {
+        const { user_id, message } = req.body;
+        
+        if (!user_id || !message) {
+            return res.status(400).json({ 
+                success: false, 
+                error: '缺少必要欄位: user_id, message' 
+            });
+        }
+        
+        // 寫入該用戶的對話日誌（格式與 ChatLogger.log() 一致）
+        const timestamp = new Date().toLocaleString('zh-TW', { 
+            timeZone: 'Asia/Taipei',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+        });
+        
+        const logEntry = `[${timestamp}] 【管理員(手動回覆)】\n${message}\n${'-'.repeat(30)}\n`;
+        const logPath = join(CHAT_LOGS_DIR, `${user_id}.txt`);
+        
+        appendFileSync(logPath, logEntry, 'utf-8');
+        
+        // 取得客人名稱
+        const profiles = getUserProfiles();
+        const profile = profiles[user_id];
+        const displayName = profile 
+            ? (typeof profile === 'string' ? profile : profile.display_name) 
+            : user_id;
+        
+        console.log(`📝 手動回覆同步：管理員 → ${displayName}(${user_id}): ${message.slice(0, 50)}...`);
+        
+        res.json({ 
+            success: true, 
+            message: `已記錄回覆給 ${displayName}`,
+            display_name: displayName
+        });
+    } catch (error) {
+        console.error('同步回覆失敗:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

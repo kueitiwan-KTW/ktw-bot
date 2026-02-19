@@ -92,6 +92,16 @@ const widgets = ref([
     visible: true,
     collapsed: false,
   },
+  {
+    id: "sync-reply",
+    title: "📝 同步回覆",
+    x: 0,
+    y: 18,
+    w: 100,
+    h: 4,
+    visible: true,
+    collapsed: false,
+  },
 ]);
 
 // 分頁配置：昨、今、明 + 未來 5 天
@@ -240,6 +250,85 @@ async function fetchGuestData(offset) {
 async function fetchAllGuestTabs() {
   await Promise.all(GUEST_TABS_CONFIG.map((cfg) => fetchGuestData(cfg.offset)));
 }
+
+// ============================================
+// 同步回覆（手動回覆記錄）
+// ============================================
+const chatUsers = ref([]);
+const chatUsersLoading = ref(false);
+const selectedUserId = ref(null);
+const syncReplyMessage = ref('');
+const syncReplyStatus = ref(null); // null | 'sending' | 'success' | 'error'
+
+async function fetchChatUsers() {
+  chatUsersLoading.value = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/users`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        chatUsers.value = result.data || [];
+      }
+    }
+  } catch (error) {
+    console.error('取得客人列表失敗:', error);
+  } finally {
+    chatUsersLoading.value = false;
+  }
+}
+
+async function syncReply() {
+  if (!selectedUserId.value || !syncReplyMessage.value.trim()) return;
+
+  syncReplyStatus.value = 'sending';
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/sync-reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: selectedUserId.value,
+        message: syncReplyMessage.value.trim(),
+      }),
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        syncReplyStatus.value = 'success';
+        syncReplyMessage.value = '';
+        // 3 秒後清除成功狀態
+        setTimeout(() => { syncReplyStatus.value = null; }, 3000);
+      } else {
+        syncReplyStatus.value = 'error';
+      }
+    }
+  } catch (error) {
+    console.error('同步回覆失敗:', error);
+    syncReplyStatus.value = 'error';
+  }
+}
+
+// 格式化最後對話時間
+function formatLastActivity(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return '剛剛';
+  if (diffMin < 60) return `${diffMin}分鐘前`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}小時前`;
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay}天前`;
+}
+
+// 取得選中客人的顯示名
+const selectedUserName = computed(() => {
+  const user = chatUsers.value.find(u => u.user_id === selectedUserId.value);
+  return user?.display_name || '';
+});
 
 // ============================================
 // LINE 當日預訂（暫存訂單）
@@ -618,6 +707,9 @@ onMounted(() => {
   // LINE 當日預訂 (每30秒)
   fetchSameDayBookings();
   setInterval(fetchSameDayBookings, 30000);
+
+  // 同步回覆面板：載入客人列表
+  fetchChatUsers();
 
   // 啟動倒數計時器
   startCountdown();
@@ -1524,6 +1616,73 @@ const statusIcons = {
                   </div>
                 </div>
               </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 📝 同步回覆面板 -->
+      <div
+        v-if="widgets.find(w => w.id === 'sync-reply')?.visible"
+        class="gs-18 grid-stack-item"
+        gs-id="sync-reply"
+        :gs-x="widgets.find(w => w.id === 'sync-reply')?.x"
+        :gs-y="widgets.find(w => w.id === 'sync-reply')?.y"
+        :gs-w="widgets.find(w => w.id === 'sync-reply')?.w"
+        :gs-h="widgets.find(w => w.id === 'sync-reply')?.h"
+      >
+        <div class="grid-stack-item-content sync-reply-panel">
+          <div class="widget-header widget-handle">
+            <span class="widget-title">📝 同步回覆（手動回覆記錄）</span>
+            <button class="collapse-btn" @click="fetchChatUsers">🔄</button>
+          </div>
+          <div class="widget-body">
+            <div class="sync-reply-container">
+              <!-- 客人選擇列表 -->
+              <div class="sync-reply-users">
+                <div class="sync-reply-label">選擇客人：</div>
+                <div v-if="chatUsersLoading" class="empty-text">載入中...</div>
+                <div v-else-if="chatUsers.length === 0" class="empty-text">
+                  尚無客人記錄
+                  <button class="sync-load-btn" @click="fetchChatUsers">載入客人列表</button>
+                </div>
+                <div v-else class="sync-user-list">
+                  <div
+                    v-for="u in chatUsers"
+                    :key="u.user_id"
+                    class="sync-user-item"
+                    :class="{ active: selectedUserId === u.user_id }"
+                    @click="selectedUserId = u.user_id"
+                  >
+                    <span class="sync-user-name">{{ u.display_name }}</span>
+                    <span class="sync-user-time">{{ formatLastActivity(u.last_activity) }}</span>
+                  </div>
+                </div>
+              </div>
+              <!-- 回覆輸入 -->
+              <div class="sync-reply-input" v-if="selectedUserId">
+                <div class="sync-reply-target">回覆給：<strong>{{ selectedUserName }}</strong></div>
+                <textarea
+                  v-model="syncReplyMessage"
+                  placeholder="輸入你在 LINE OA Manager 回覆客人的內容..."
+                  rows="3"
+                  class="sync-textarea"
+                ></textarea>
+                <div class="sync-reply-actions">
+                  <button
+                    class="sync-submit-btn"
+                    :disabled="!syncReplyMessage.trim() || syncReplyStatus === 'sending'"
+                    @click="syncReply"
+                  >
+                    {{ syncReplyStatus === 'sending' ? '記錄中...' : '📝 記錄回覆' }}
+                  </button>
+                  <span v-if="syncReplyStatus === 'success'" class="sync-success">✅ 已記錄，AI 下次對話能看到</span>
+                  <span v-if="syncReplyStatus === 'error'" class="sync-error">❌ 記錄失敗</span>
+                </div>
+              </div>
+              <div class="sync-reply-hint" v-else>
+                👈 請先選擇要同步回覆的客人
+              </div>
             </div>
           </div>
         </div>

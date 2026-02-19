@@ -98,19 +98,24 @@ class VIPServiceHandler(BaseHandler):
             desc = pending_task.get('description', '處理') if pending_task else '處理'
             return f"{role_title}，請傳送您要{desc}的圖片。"
         
-        # 2. 偵測是否需要圖片的任務
+        # 2. 手動回覆同步 — 記錄擁有者在 LINE OA Manager 手動回覆客人的內容
+        sync_result = self._handle_manual_reply_sync(message, role_title)
+        if sync_result:
+            return sync_result
+        
+        # 3. 偵測是否需要圖片的任務
         image_task = self._detect_image_task(message)
         if image_task:
             self.state_machine.transition(user_id, self.STATE_VIP_WAITING_IMAGE)
             self.state_machine.set_data(user_id, 'pending_task', image_task)
             return f"{role_title}，好的，請傳送您要{image_task['description']}的圖片。"
         
-        # 3. 處理 PMS 業務查詢 (關鍵字驅動)
+        # 4. 處理 PMS 業務查詢 (關鍵字驅動)
         pms_response = self._handle_pms_query(message, role_title)
         if pms_response:
             return pms_response
         
-        # 4. 網路搜尋
+        # 5. 網路搜尋
         search_match = re.search(r'(?:幫我查一下|幫我查|搜尋一下|搜尋|查一下|上網查|幫我搜尋|幫查)(.+)', message)
         if search_match:
             query = search_match.group(1).strip()
@@ -118,7 +123,7 @@ class VIPServiceHandler(BaseHandler):
                 result = web_search.search(query, role_title)
                 return result.get('message')
         
-        # 5. 一般問答（天氣、景點等）- 交回主流程處理
+        # 6. 一般問答（天氣、景點等）- 交回主流程處理
         # 回傳 None 讓 bot.py 的 generate_response 處理，以啟用 Function Calling
         return None
     
@@ -361,6 +366,78 @@ class VIPServiceHandler(BaseHandler):
         except Exception as e:
             print(f"❌ VIP 圖片處理錯誤: {e}")
             return f"{role_title}，圖片處理時發生預期外的錯誤，請確認圖片格式後再試一次。"
+    
+    def _handle_manual_reply_sync(self, message: str, role_title: str) -> Optional[str]:
+        """
+        處理手動回覆同步指令
+        
+        當擁有者在 LINE OA Manager 手動回覆客人後，用個人 LINE 對 Bot 說：
+        - 「我跟 XXX 說了 YYY」
+        - 「回覆了 XXX YYY」  
+        - 「跟 XXX 說 YYY」
+        - 「跟客人說了 YYY」（不指定客人名）
+        
+        Bot 只記錄到 ChatLogger，不重複發送訊息給客人。
+        這樣 AI 下次處理該客人訊息時能看到完整對話脈絡。
+        """
+        # 多種觸發格式
+        patterns = [
+            # 「我跟 XXX 說了 YYY」「跟 XXX 說 YYY」
+            r'(?:我)?跟\s*(.+?)\s*說(?:了)?\s+(.+)',
+            # 「回覆了 XXX YYY」「回覆 XXX YYY」
+            r'回覆(?:了)?\s*(.+?)\s+(?:說\s*)?(.+)',
+            # 「跟客人說了 YYY」（不指定客人名，需搭配最近對話的客人）
+            r'(?:我)?跟客人說(?:了)?\s+(.+)',
+        ]
+        
+        target_name = None
+        reply_content = None
+        
+        for i, pattern in enumerate(patterns):
+            match = re.search(pattern, message, re.DOTALL)
+            if match:
+                if i < 2:  # 有指定客人名的格式
+                    target_name = match.group(1).strip()
+                    reply_content = match.group(2).strip()
+                else:  # 不指定客人名的格式
+                    reply_content = match.group(1).strip()
+                break
+        
+        if not reply_content:
+            return None
+        
+        # 根據客人名查找 user_id
+        target_user_id = None
+        matched_display_name = None
+        
+        if target_name and self.logger:
+            # 從 ChatLogger 的 profiles 中查找
+            for uid, profile in self.logger.profiles.items():
+                if isinstance(profile, dict):
+                    name = profile.get('display_name', '')
+                else:
+                    name = profile  # 舊格式：純字串
+                
+                if name and target_name in name:
+                    target_user_id = uid
+                    matched_display_name = name
+                    break
+        
+        if not target_name:
+            # 不指定客人名：直接記錄為通用備註
+            if self.logger:
+                self.logger.log('_admin_notes', '管理員(手動回覆)', reply_content)
+            return f"{role_title}，已記錄您的回覆內容 ✅"
+        
+        if not target_user_id:
+            return f"{role_title}，找不到名為「{target_name}」的客人記錄。請確認客人名稱是否正確。"
+        
+        # 記錄到該客人的對話日誌
+        self.logger.log(target_user_id, '管理員(手動回覆)', reply_content)
+        
+        print(f"📝 手動回覆同步：管理員 → {matched_display_name}({target_user_id}): {reply_content[:50]}...")
+        
+        return f"{role_title}，已記錄您回覆「{matched_display_name}」的內容 ✅\nAI 下次對話時會看到這段回覆。"
     
     def _detect_image_task(self, message: str) -> Optional[Dict]:
         """偵測是否為需要圖片的任務 (優化 Regex)"""

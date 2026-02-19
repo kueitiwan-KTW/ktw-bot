@@ -2111,3 +2111,183 @@ body {
   line-height: 1.4;
   word-break: break-word;
 }
+
+/* ============================================
+   同步回覆面板
+   ============================================ */
+.sync-reply-panel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.sync-reply-container {
+  display: flex;
+  gap: 20px;
+  min-height: 120px;
+}
+
+.sync-reply-users {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.sync-reply-label {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.sync-user-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-user-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.sync-user-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sync-user-item.active {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(123, 47, 247, 0.2));
+  border: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.sync-user-name {
+  font-size: 0.88rem;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.sync-user-item.active .sync-user-name {
+  color: #fff;
+}
+
+.sync-user-time {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.sync-user-item.active .sync-user-time {
+  color: #00d4ff;
+}
+
+.sync-reply-input {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sync-reply-target {
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.sync-reply-target strong {
+  color: #00d4ff;
+}
+
+.sync-textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  padding: 12px;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.3s;
+}
+
+.sync-textarea:focus {
+  outline: none;
+  border-color: rgba(0, 212, 255, 0.5);
+}
+
+.sync-textarea::placeholder {
+  color: #555;
+}
+
+.sync-reply-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sync-submit-btn {
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 20px;
+  font-size: 0.88rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+}
+
+.sync-submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+}
+
+.sync-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sync-success {
+  font-size: 0.85rem;
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.sync-error {
+  font-size: 0.85rem;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.sync-reply-hint {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.sync-load-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  color: white;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.2s;
+}
+
+.sync-load-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}

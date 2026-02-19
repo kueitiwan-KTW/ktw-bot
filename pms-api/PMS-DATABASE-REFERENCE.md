@@ -2,53 +2,138 @@
 
 > 記錄 PMS (Oracle) 資料庫的重要資料表結構和欄位說明
 
+## 📌 核心策略：文檔即接口
+
+> **定義正確 = 結果正確。**
+>
+> 只要本文檔的欄位定義、狀態代碼、業務邏輯完整且正確，AI 可直接根據自然語言需求產生正確的 SQL 查詢，**不需要額外編寫 API endpoint**。
+>
+> 本文檔本質上是把飯店 PMS 的 know-how 數位化為 AI 可讀格式。
+
+### 維護原則
+
+| 原則 | 說明 |
+|------|------|
+| **遇到不確定，先查再定義** | 遇到未知欄位或狀態，先實際查資料庫驗證，再寫入文檔 |
+| **定義只付一次學費** | 一旦確認並記錄，後續查詢不會再出錯 |
+| **邊界案例必須記錄** | 特殊情況（如公帳號是虛擬房間）一定要寫清楚 |
+| **禁止猜測** | 沒有事證的欄位含義不得寫入，必須經過實際驗證 |
+
 ---
 
-## 🎯 重要發現：客戶備註系統
+## GHIST_MN - 客戶歷史主檔 ⭐
 
-### GHIST_MN - 客戶歷史主檔 ⭐
-
-> **用途**：存放客戶的歷史記錄和備註（跨訂單、永久保存）
+> **用途**：存放客戶的歷史記錄和備註（跨訂單、永久保存），共 82 個欄位，**6,693 筆客戶**
 >
-> **關聯**：透過 `ID_NOS` (身分證號) 或 `ALT_NAM` (姓名) 關聯客人
+> **關聯**：透過 `GCUST_COD`（HFD 編號）或 `ID_NOS`（身分證號）關聯 GUEST_MN
 >
 > **特點**：備註會跟著客人，不管他住哪間房或哪次訂單
 
-#### 關鍵欄位
+### 基本資料
 
 | 欄位名 | 說明 | 範例值 | 備註 |
 |--------|------|--------|------|
-| **ID_NOS** | 身分證號 | A123182837 | 主要識別欄位 |
+| **GCUST_COD** | 客戶唯一編號 | HFD000000000310001 | HFD 開頭，主鍵 |
+| **SHOW_COD** | 顯示代碼 | HFD000000000310001 | 同 GCUST_COD |
 | **LAST_NAM** | 姓 | 郭 | |
 | **FIRST_NAM** | 名 | 可驥 | |
 | **ALT_NAM** | 姓名 | 郭可驥 | |
-| **REQUST_RMK** | 客戶需求備註 | 副院長的教授 | ⭐ **客戶備註欄位** |
-| **CHARACTER_RMK** | 個性備註 | NULL | 客人個性特徵 |
-| **ANAMNESIS** | 病歷/過敏史 | NULL | 醫療相關資訊 |
-| **CONTACT1_RMK** | 聯絡電話1 | 0919220815 | |
-| **CONTACT2_RMK** | 聯絡電話2 | NULL | |
-| **CONTACT3_RMK** | 聯絡電話3 | NULL | |
-| **CONTACT4_RMK** | 聯絡電話4 | NULL | |
-| **VISITDAT_NOS** | 來訪次數 | 0 | 累計住宿次數 |
-| **FIRST_DAT** | 首次來訪日期 | NULL | |
-| **LAST_DAT** | 最近來訪日期 | NULL | |
-| **WEDDING_DAT** | 結婚紀念日 | NULL | |
-| **BIRTH_DAT** | 生日 | 1966-10-28 | |
-| **INS_DAT** | 建立日期 | 2025-12-13 17:22:06 | |
-| **UPD_DAT** | 更新日期 | 2025-12-13 17:23:59 | |
+| **ID_NOS** | 身分證號 | A123182837 | 🔍 主要搜尋欄位 |
+| **GUEST_TYP** | 客人類型代碼 | 03 | |
+| **GUEST_WAY** | 來源途徑 | | |
+| **CONTRY_COD** | 國籍 | TWN | |
+| **SEX_TYP** | 性別 | M | M=男, F=女 |
+| **BIRTH_DAT** | 生日 | 1986-11-30 | |
 
-#### 實際案例
+### 聯絡資料
+
+| 欄位名 | 說明 | 範例值 |
+|--------|------|--------|
+| **CONTACT1_RMK** | 聯絡電話1 | 0989015163 |
+| **CONTACT2_RMK** | 聯絡電話2 | |
+| **CONTACT3_RMK** | 聯絡電話3 | |
+| **CONTACT4_RMK** | 聯絡電話4 | |
+| **E_MAIL** | 電子郵件 | raintoo@hotmail.com |
+
+### 備註與入住歷史
+
+| 欄位名 | 說明 | 使用率 | 備註 |
+|--------|------|--------|------|
+| **REQUST_RMK** | ⭐ 客戶需求備註 | **204 筆** | 跨訂單永久備註 |
+| **CHARACTER_RMK** | 個性備註 | 0 筆 | 未使用 |
+| **ANAMNESIS** | 病歷/過敏史 | 0 筆 | 未使用 |
+| **FIRST_DAT** | 首次入住日 | | |
+| **LAST_DAT** | 最後入住日 | | |
+| **VISIT_NOS** | 累計入住次數 | | |
+| **VISITDAT_NOS** | 累計住宿天數 | | |
+| **TRANS_TOT** | 累計消費金額 | | |
+| **WEDDING_DAT** | 結婚紀念日 | | |
+
+### 車輛資料
+
+| 欄位名 | 說明 | 使用率 | 備註 |
+|--------|------|--------|------|
+| **CAR_NOS** | ⭐ 車牌號碼 | **4,199 筆 (63%)** | 活躍使用 |
+| **CAR_BARND** | 車輛品牌 | 12 筆 | ⚠️ 實際被誤填為車輛顏色（如「紅色」「黑」） |
+| **CAR_COLOR** | 車輛顏色 | 0 筆 | 未使用 |
+
+> [!WARNING]
+> `CAR_BARND` 欄位本應填車輛品牌，但館內實際填的是**車輛顏色**（紅色、黑、白色等）。`CAR_COLOR` 反而沒人用。
+
+### 偏好設定 ⚠️ 幾乎未使用
+
+| 欄位名 | 說明 | 使用筆數 |
+|--------|------|---------|
+| FAVER_FOOD | 喜好食物 | 1 |
+| FAVER_DRINK | 喜好飲料 | 3 |
+| FAVER_SMOKE | 吸煙偏好 | 2 |
+| FAVER | 其他偏好 | 0 |
+| FAVER_OTHER | 其他偏好2 | 0 |
+| FAVER_NEWSPP | 報紙偏好 | 0 |
+| FAVER_SPA | SPA偏好 | 0 |
+
+> 偏好欄位幾乎沒有在填寫，目前不具實用價值。
+
+### 其他欄位
+
+| 欄位名 | 說明 | 備註 |
+|--------|------|------|
+| **VIP_STA** | VIP 狀態 | 全部為 0（未使用） |
+| **CCUST_COD** | 公司客戶代碼 | CS 開頭 |
+| **CCUST_NAM** | 公司名稱 | |
+| **PREF_ROOM** | 偏好房型 | |
+| **UNIINV_TITLE** | 發票抬頭 | |
+| **UNI_COD** | 統一編號 | |
+| **GHIST1~10_TYP** | 客戶分類標籤 | ⚠️ 全部 0 筆，完全未使用 |
+| **AIRLINE_COD** | 航空公司代碼 | |
+| **AIRMB_NOS** | 航空會員號 | |
+
+### 查詢範例
 
 ```sql
-SELECT * FROM GDWUUKT.GHIST_MN WHERE TRIM(ID_NOS) = 'A123182837'
+-- 用身分證號查客戶備註
+SELECT TRIM(ALT_NAM), TRIM(REQUST_RMK), TRIM(CAR_NOS)
+FROM GDWUUKT.GHIST_MN
+WHERE TRIM(ID_NOS) = 'A123182837';
+
+-- 用車牌查客人
+SELECT TRIM(ALT_NAM), TRIM(ID_NOS), TRIM(CONTACT1_RMK)
+FROM GDWUUKT.GHIST_MN
+WHERE TRIM(CAR_NOS) LIKE '%2469%';
 ```
 
-結果：
+### 關聯說明
+
 ```
-姓名: 郭可驥
-身分證: A123182837
-REQUST_RMK: 副院長的教授  ← 客戶備註
-建立時間: 2025-12-13 17:22:06
+ORDER_MN (訂單表)
+├── IKEY (訂單編號)
+├── CCUST_COD → GHIST_MN.CCUST_COD (公司)
+└── 透過 GUEST_MN 關聯到 GHIST_MN
+
+GUEST_MN (住客表)
+├── IKEY → ORDER_MN.IKEY
+├── GCUST_COD → GHIST_MN.GCUST_COD (客人)
+└── ID_COD → GHIST_MN.ID_NOS
 ```
 
 ---
@@ -81,7 +166,7 @@ REQUST_RMK: 副院長的教授  ← 客戶備註
 | **RCO_DAT** | 預計退房日 | 2025-12-14 | Reservation Check-out Date |
 | **ECO_DAT** | 預計退房日 | 2025-12-14 | Expected Check-out Date |
 | **ACO_DAT** | 實際退房日 | NULL | Actual Check-out Date |
-| **GUEST_STA** | 住客狀態 | O | O=入住中 |
+| **GUEST_STA** | 住客狀態 | O | O=在住/C=已退/K=公帳號 |
 | **GUEST_TYP** | 客人類型 | 04 | 類型代碼 |
 | **RATE_COD** | 房價代碼 | OTAnfb | OTA non-breakfast |
 | **ROOM_COD** | 房型代碼 | DD | 對應到 ROOM_RF |
@@ -89,11 +174,11 @@ REQUST_RMK: 副院長的教授  ← 客戶備註
 | **CCUST_NAM** | 公司/訂房來源 | agoda | |
 | **RENT_AMT** | 房租金額 | 2131 | 實際房價 |
 | **SERV_AMT** | 服務費 | 0 | |
-| **MASTER_NOS** | 主房號 | 606 | 多房關聯時使用 |
+| **MASTER_NOS** | 主房號/公帳號 | 606 / G094 | 多房關聯或公帳號集中帳款 |
 | **MASTER_STA** | 是否主房 | N | Y/N |
 | **REMARK1** | 備註1 | OTA定價不含早... | 訂房備註 |
 | **INS_USR** | 建立人員 | root | |
-| **CAR_NOS** | 車號 | 5289 | 停車場車號 |
+| **CAR_NOS** | ⭐ 車牌號碼 | 2469 / AJQ72302 | 住客登記的車牌號碼 |
 
 ### 完整欄位列表
 
@@ -111,6 +196,38 @@ SYSTEM_TYP, CAR_NOS, OLD_RENT_AMT, RENT_AMT, OLD_SERV_AMT,
 SERV_AMT, UNI_TITLE, CCUST_NAM, CARRIERID2, CARRIERID1, 
 CARRIERTYPE, NPOBAN, DONATEMARK, ACO_SYS_DAT, AIRLINE_COD, 
 AIRMB_NOS, PERSONAL_APPRAISE, USE_DAILY_RATE
+```
+
+### 住客狀態代碼對照 (GUEST_STA) ⭐
+
+> **2026-02-19 實際驗證確認**（310 退房前後對比、616 在住確認、G094 公帳號查詢）
+
+| 代碼 | 說明 | ACO_DAT | 判斷 |
+|:---:|:-----|:--------|:-----|
+| **O** | 在住 (Occupied) | 空（NULL） | 已入住、尚未退房 |
+| **C** | 已退房 (Checked-out) | 有實退日期 | 完成退房程序 |
+| **K** | 公帳號 (Master Folio) | 空 | 虛擬房間（如 G094），集中帳款用 |
+
+### 公帳號機制 (Master Folio)
+
+> **用途**：多房集中帳款。虛擬房號（如 `G094`）不對應實體房間，多間實房透過 `MASTER_NOS` 關聯到同一個公帳號。
+
+```
+公帳號 G094 (GUEST_STA=K)
+├── 602 號房 (GUEST_STA=O, 在住)
+├── 508 號房 (GUEST_STA=C, 已退)
+└── 516 號房 (GUEST_STA=C, 已退)
+
+所有帳款集中記在 G094 上
+```
+
+**查詢某公帳號關聯的所有房間**：
+```sql
+SELECT TRIM(ROOM_NOS), TRIM(ALT_NAM), TRIM(GUEST_STA), TRIM(CAR_NOS)
+FROM GDWUUKT.GUEST_MN
+WHERE TRIM(MASTER_NOS) = 'G094'
+  AND CI_DAT >= TO_DATE('2026-02-17','YYYY-MM-DD')
+ORDER BY ROOM_NOS;
 ```
 
 ---
@@ -153,6 +270,52 @@ AIRMB_NOS, PERSONAL_APPRAISE, USE_DAILY_RATE
 | **D** | Checked-Out | 已退房 |
 | **C** | Cancelled | 已取消 |
 | **R** | Reserved | 預約中 |
+
+### OTA 訂單編號前綴對照 (RVRESERVE_NOS)
+
+> **2026-02-19 資料庫實際統計 + 交叉驗證確認**
+
+| 前綴 | 訂房來源 | 筆數 | SOURCE_TYP | 備註 |
+|:-----|:---------|-----:|:----------:|:-----|
+| **RMAG** | Agoda | 3,041 | OTA | 直連 Agoda |
+| **RMWH** | 官網訂房（舊） | 950 | 04 網路 | 2022 年前使用，CUST_NAM=德安網路訂房 |
+| **RMPG** | 官網訂房（新） | 907 | 04 網路 | 2025 年起使用，CUST_NAM=德安網路訂房 |
+| **RMSM** | SiteMinder 串接 | 628 | OTA | 多通路 OTA 聚合（含 Agoda/Booking/攜程/易遊網等） |
+| **RMBK** | Booking.com | 263 | OTA | 直連 Booking |
+| **RMEX** | Expedia | 27 | OTA | 直連 Expedia |
+| **RMAB** | ABC 訂房中心 | 16 | OTA/03 | 鼎業旅行社代理，2020 年底已停用 |
+| **RMCT** | 攜程 (Ctrip) | 3 | OTA | 直連攜程 |
+| **RMEZ** | 易遊網 | 3 | OTA | 直連易遊網 |
+
+> [!NOTE]
+> **前綴命名規則**：`RM` = Room Management（房間管理系統） + 通路縮寫（AG=Agoda, BK=Booking, EX=Expedia, CT=Ctrip, EZ=易遊, WH/PG=官網, SM=SiteMinder, AB=ABC）
+>
+> **RMWH vs RMPG**：都是官網訂房（德安網路訂房系統），差異在於系統世代。RMWH 為舊版（~2022），RMPG 為新版（2025~）。
+>
+> **RMSM 的特殊性**：SiteMinder 是 Channel Manager（通路管理器），它的訂單 CUST_NAM 會帶有實際 OTA 名稱（agoda 284 筆、booking 157 筆、expedia 14 筆、攜程 12 筆、易遊網 11 筆、四方通行 3 筆、AsiaYo 1 筆）。
+>
+> **數字前綴**（01AG、01BK 等）：少量早期訂單，屬同通路的不同客戶帳號。
+
+### SOURCE_RF - 訂房來源對照表
+
+> **用途**：定義 `ORDER_MN.SOURCE_TYP` 的所有來源類型
+
+| SOURCE_TYP | 中文名稱 | 英文 |
+|:----------:|:---------|:-----|
+| 01 | 簽約客訂房 | CML |
+| 02 | 國外訂房 | INB |
+| 03 | 旅行社訂房 | T/A |
+| 04 | 網路訂房 | WEB |
+| 05 | 電話訂房 | DIR |
+| 06 | 住宿券訂房 | CPN |
+| 07 | 套裝行程訂房 | PKG |
+| 08 | 團體 | GRP |
+| 09 | LINE@ | LINE |
+| DU | DayUse | DayUse |
+| OFW | 官網訂房 | OFW |
+| OTA | OTA | OTA |
+| RT | 休息 | Rest |
+| WI | Walk In | W/I |
 
 ---
 
@@ -528,36 +691,265 @@ ORDER BY ROOM_COD
 
 > **用途**：記錄各房型按日期的價格（浮動定價）
 >
-> **特點**：週末/假日可設定不同價格
+> **特點**：週末/假日可設定不同價格，由 PMS 排程系統預先計算
 
 ### 關鍵欄位
 
 | 欄位名 | 類型 | 說明 | 備註 |
 |--------|------|------|------|
 | **CI_DAT** | DATE | 入住日期 | 查詢條件 |
-| **ROOM_COD** | NCHAR | 房型代碼 | SD, CD, WD... |
-| **PAY_TOT** | NUMBER | ⭐ **房價總額** | 含稅價格 |
-| **DAYS** | NUMBER | 天數 | 當日預訂用 DAYS=1 |
-| **PRODUCT_NOS** | NCHAR | 產品編號 | 20001901=官網優惠價 |
+| **ROOM_COD** | NCHAR | 房型代碼 | ST, SD, SQ... |
+| **PAY_TOT** | NUMBER | ⭐ **房價總額** | ROOM_AMT + OTHER_AMT |
+| **ROOM_AMT** | NUMBER | 房間金額 | 基準房價部分 |
+| **OTHER_AMT** | NUMBER | 其他金額 | 累計加價部分 |
+| **DAYS** | NUMBER | 天數 | 單日=1，多日包=N |
+| **PRODUCT_NOS** | NCHAR | 產品編號 | 見下表 |
+
+### PRODUCT_NOS 對照
+
+| PRODUCT_NOS | 房型 | 名稱 |
+|-------------|------|------|
+| `20001901` | ST | 官網優惠價ST |
+| `20002301` | SQ | 官網優惠價SQ |
+
+> ⚠️ 查詢時需使用正確的 PRODUCT_NOS，不同房型對應不同編號。
+
+---
+
+## 🎯 房價動態計算系統（核心）
+
+> **2026-02-18 完整破解並通過 PMS CLI 驗證 ✅**
+>
+> Bot 當日入住價公式：`ratecod_dt 基準價（含早）+ 日類型對應加價`
+
+### 完整定價流程鏈
+
+```
+ratecod_dt (基準價)  →  PMS試算(wrs01t0010)  →  WRS_ROOM_PRODUCT (通路價)  →  +加價  →  WRS_ROOM_PRICE (通路售價)
+  SQ: 3,280                                      SQ: 3,680 (舊基準⚠️)                        官網旺日: 5,180 / OTA: 20,000
+```
+
+> **Bot 使用基準價直接計算**（非通路價），形成當日入住「晚鳥價」策略。
+> 官網通路價 (`WRS_ROOM_PRICE`) 因未重新試算，仍使用舊基準 3,680。**此差異為刻意保留**。
+
+### Bot 價格計算關聯圖
+
+```mermaid
+graph LR
+    A[holiday_rf<br/>日期→DAY_STA] --> B{日類型判定}
+    B -->|N 平日| C[不加價]
+    B -->|D 旺日| D[service_dt 1006]
+    B -->|H 假日| E[service_dt 1003]
+    B -->|S 旺季| F[service_dt 1010]
+    B -->|T 緊迫日| G[service_dt 1013]
+    B -->|W 旺季假日| H[service_dt 1016]
+    
+    I[ratecod_mn<br/>RATE_COD=web001<br/>→ KEY=01200006] --> J[ratecod_dt<br/>基準價 RENT_AMT]
+    J --> K[Bot 當日入住價]
+    D --> K
+    E --> K
+    F --> K
+    G --> K
+    H --> K
+    C --> K
+```
+
+---
+
+## HOLIDAY_KIND_RF - 日類型定義 ⭐
+
+> **用途**：定義所有日類型代碼及名稱
+
+### 關鍵欄位
+
+| 欄位名 | 類型 | 說明 | 備註 |
+|--------|------|------|------|
+| **DAY_STA** | NCHAR | 日類型代碼 | N/D/H/S/T/W |
+| **DAY_NAM** | NVARCHAR | 日類型名稱 | 平日/旺日/假日... |
+| **COLOR_NUM** | NUMBER | 顯示色碼 | PMS 日曆顏色 |
+
+### 完整日類型
+
+| DAY_STA | 名稱 | 對應加價 SERV_COD |
+|---------|------|------------------|
+| `N` | 平日 | 無 |
+| `D` | 旺日 | `1006` |
+| `H` | 假日 | `1003` |
+| `S` | 旺季 | `1010` |
+| `T` | 緊張日 | `1013` |
+| `W` | 旺季假日 | `1016` |
+
+---
+
+## HOLIDAY_RF - 日期分類表 ⭐
+
+> **用途**：將每一天對應到日類型（平日/旺日/假日...）
+
+### 關鍵欄位
+
+| 欄位名 | 類型 | 說明 | 備註 |
+|--------|------|------|------|
+| **BATCH_DAT** | DATE | 日期 | 查詢條件 |
+| **DAY_STA** | NCHAR | 日類型代碼 | 參照 HOLIDAY_KIND_RF |
+| **HOTEL_COD** | NCHAR | 旅館代碼 | `01` |
 
 ### 查詢範例
 
 ```sql
--- 查詢今日各房型價格（官網優惠價）
-SELECT 
-    TRIM(ROOM_COD) as 房型,
-    PAY_TOT as 價格
-FROM GDWUUKT.WRS_ROOM_PRICE 
-WHERE TRUNC(CI_DAT) = TRUNC(SYSDATE)
-  AND DAYS = 1
-  AND TRIM(PRODUCT_NOS) = '20001901'
-ORDER BY ROOM_COD
+-- 查詢今天的日類型
+SELECT DAY_STA FROM GDWUUKT.HOLIDAY_RF
+WHERE TRUNC(BATCH_DAT) = TRUNC(SYSDATE);
 ```
 
-### 價格來源優先順序
+---
 
-1. **WRS_ROOM_PRICE** (按日期浮動價) - `PRODUCT_NOS = '20001901'`
-2. **RATECOD_DT** (固定價) - `RATE_COD = 'web001'`
+## RATECOD_MN - 費率主檔 ⭐
+
+> **用途**：定義費率代碼與唯一鍵的對應關係
+
+### 關鍵欄位
+
+| 欄位名 | 類型 | 說明 | 備註 |
+|--------|------|------|------|
+| **KEY** | NCHAR | 費率唯一鍵 | 全系統關聯用 |
+| **RATE_COD** | NCHAR | 費率代碼 | `web001`=官網優惠價 |
+| **REMARK2** | NVARCHAR | 備註 | 如「基準價」 |
+
+### 重要值
+
+| KEY | RATE_COD | 說明 |
+|-----|----------|------|
+| `01200006` | `web001` | 官網優惠價 |
+
+---
+
+## RATECOD_DT - 費率明細表（基準價）⭐
+
+> **用途**：存放各房型在特定費率下的基準售價（含早餐）
+
+### 關鍵欄位
+
+| 欄位名 | 類型 | 說明 | 備註 |
+|--------|------|------|------|
+| **KEY** | NCHAR | 費率唯一鍵 | 連結 RATECOD_MN |
+| **ROOM_COD** | NCHAR | 房型代碼 | ST/SD/SQ |
+| **RENT_AMT** | NUMBER | ⭐ **基準售價（含早餐）** | 實際計算基準 |
+| **SERV_AMT** | NUMBER | 服務旗標 | 1.0 |
+
+### web001 各房型基準價
+
+| 房型 | RENT_AMT | 組成 |
+|------|----------|------|
+| SD（標準三人房） | 2,280 | 房租 + 早餐 250×2 |
+| ST（標準雙人房） | 2,880 | 房租 + 早餐 250×2 |
+| SQ（標準四人房） | 3,280 | 房租 2,280 + 早餐 250×4 |
+
+---
+
+## SERVICE_RF - 服務項目定義表 ⭐
+
+> **用途**：定義所有附加服務的代碼、名稱與類型
+
+### 關鍵欄位
+
+| 欄位名 | 類型 | 說明 | 備註 |
+|--------|------|------|------|
+| **ITEM_NOS** | NCHAR | 服務代碼 | = SERV_COD |
+| **ITEM_NAM** | NVARCHAR | 服務名稱 | 如「旺日加價」 |
+| **ITEM_AMT** | NUMBER | 預設金額 | 實際金額在 SERVICE_DT |
+| **CHARG_TYP** | NCHAR | 計費類型 | Q=房間, I=人頭 |
+| **COMMAND_OPTION** | NCHAR | ⭐ **日類型映射** | `H` + DAY_STA |
+| **SERV_TYP** | NCHAR | 服務分類 | `07`=房務類 |
+| **SMALL_TYP** | NCHAR | 小分類 | `101`=加價類 |
+
+### 房價相關服務項目
+
+| ITEM_NOS | 名稱 | COMMAND_OPTION | 對應 DAY_STA | CHARG_TYP |
+|----------|------|---------------|-------------|-----------|
+| `1001` | 房租 | *(空)* | — | Q（每房） |
+| `1003` | 假日加價 | `HH` | H | Q |
+| `1006` | 旺日加價 | `HD` | D | Q |
+| `1010` | 旺季加價 | `HS` | S | Q |
+| `1013` | 緊迫日加價 | `HT` | T | Q |
+| `1016` | 旺季假日 | `HW` | W | Q |
+| `2008` | 客房早餐 | — | — | I（每人） |
+
+> **映射規則**：`COMMAND_OPTION` = `"H"` + `DAY_STA`（可動態查詢）
+
+---
+
+## SERVICE_DT - 服務金額明細表 ⭐
+
+> **用途**：存放各費率+房型組合下的附加服務金額
+
+### 關鍵欄位
+
+| 欄位名 | 類型 | 說明 | 備註 |
+|--------|------|------|------|
+| **KEY** | NCHAR | 費率唯一鍵 | 連結 RATECOD_MN |
+| **ROOM_COD** | NCHAR | 房型代碼 | ST/SD/SQ |
+| **SERV_COD** | NCHAR | 服務代碼 | 連結 SERVICE_RF.ITEM_NOS |
+| **ITEM_AMT** | NUMBER | ⭐ **加價金額** | 實際使用金額 |
+| **SERV_QNT** | NUMBER | 服務數量 | 早餐=人數 |
+
+### web001 各房型加價一覽
+
+| SERV_COD | 名稱 | SQ（四人房） | SD（三人房） |
+|----------|------|-------------|-------------|
+| 1003 | 假日加價 | 500 | 200 |
+| 1006 | 旺日加價 | 1,500 | 700 |
+| 1010 | 旺季加價 | 500 | 200 |
+| 1013 | 緊迫日加價 | 3,000 | 1,400 |
+| 1016 | 旺季假日 | 500 | 200 |
+| 2008 | 客房早餐 | 250×4人 | 250×2人 |
+
+### 查詢範例
+
+```sql
+-- 查詢 SQ 房型在 web001 費率下的旺日加價金額
+SELECT ITEM_AMT FROM GDWUUKT.SERVICE_DT
+WHERE KEY IN (SELECT KEY FROM GDWUUKT.RATECOD_MN WHERE TRIM(RATE_COD) = 'web001')
+  AND TRIM(ROOM_COD) = 'SQ'
+  AND TRIM(SERV_COD) = '1006';
+-- 結果：1500
+```
+
+---
+
+## 正確的房價計算邏輯
+
+```sql
+-- 步驟 1：取基準價（含早）
+SELECT RENT_AMT FROM GDWUUKT.RATECOD_DT
+WHERE KEY IN (SELECT KEY FROM GDWUUKT.RATECOD_MN WHERE TRIM(RATE_COD) = 'web001')
+  AND TRIM(ROOM_COD) = :room_type;
+
+-- 步驟 2：取今天日類型
+SELECT DAY_STA FROM GDWUUKT.HOLIDAY_RF
+WHERE TRUNC(BATCH_DAT) = TRUNC(SYSDATE);
+
+-- 步驟 3：根據日類型找對應加價服務代碼
+SELECT ITEM_NOS FROM GDWUUKT.SERVICE_RF
+WHERE TRIM(COMMAND_OPTION) = 'H' || :day_sta;
+
+-- 步驟 4：取加價金額
+SELECT ITEM_AMT FROM GDWUUKT.SERVICE_DT
+WHERE KEY IN (SELECT KEY FROM GDWUUKT.RATECOD_MN WHERE TRIM(RATE_COD) = 'web001')
+  AND TRIM(ROOM_COD) = :room_type
+  AND TRIM(SERV_COD) = :serv_cod_from_step3;
+
+-- 步驟 5：總價 = RENT_AMT + ITEM_AMT（平日 ITEM_AMT 為 0）
+```
+
+### 驗證結果（2026-02-18 PMS CLI 確認）
+
+| 日期 | 日類型 | 房型 | 基準價 | 加價 | 總價 |
+|------|--------|------|--------|------|------|
+| 02/18 | D 旺日 | SQ | 3,280 | +1,500 | **4,780** ✅ |
+| 02/25 | N 平日 | SQ | 3,280 | 0 | **3,280** ✅ |
+| 02/25 | N 平日 | SD | 2,280 | 0 | **2,280** ✅ |
+| 03/21 | H 假日 | SQ | 3,280 | +500 | **3,780** ✅ |
+| 03/21 | H 假日 | SD | 2,280 | +200 | **2,480** ✅ |
 
 ---
 
@@ -580,8 +972,13 @@ ORDER BY ROOM_COD
 
 **範例訂單**：00709801
 
----
+### PMS API 已知 Bug
 
+> ⚠️ [rooms.js](file:///Users/ktw/ktw-projects/ktw-bot/pms-api/routes/rooms.js) 的 `today-availability` 端點存在以下問題：
+
+1. **PRODUCT_NOS 硬編碼**：只使用 `20001901`（ST），SQ 應為 `20002301`
+2. **DAYS 篩選問題**：固定 `DAYS = 1` 但部分房型僅有多日包價格
+3. **未使用動態加價邏輯**：未查詢 `holiday_rf` + `service_dt` 計算日類型加價
 
 ---
 
@@ -598,5 +995,5 @@ ORDER BY ROOM_COD
 
 ---
 
-*最後更新：2025-12-21*
+*最後更新：2026-02-18*
 *資料來源：PMS Server (192.168.8.3) - GDWUUKT Schema*
