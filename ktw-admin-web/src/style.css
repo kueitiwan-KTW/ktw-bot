@@ -2113,8 +2113,49 @@ body {
 }
 
 /* ============================================
-   同步回覆面板
+   同步回覆獨立專區
    ============================================ */
+.sync-reply-page {
+  padding: 20px;
+}
+
+.sync-page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sync-page-header h3 {
+  font-size: 1.3rem;
+  color: #fff;
+  margin: 0;
+}
+
+.sync-page-desc {
+  flex: 1;
+  color: #888;
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.sync-refresh-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sync-refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
 .sync-reply-panel {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2130,7 +2171,7 @@ body {
 }
 
 .sync-reply-users {
-  width: 240px;
+  width: 300px;
   flex-shrink: 0;
 }
 
@@ -2142,7 +2183,7 @@ body {
 }
 
 .sync-user-list {
-  max-height: 200px;
+  max-height: 500px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

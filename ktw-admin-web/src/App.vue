@@ -92,16 +92,6 @@ const widgets = ref([
     visible: true,
     collapsed: false,
   },
-  {
-    id: "sync-reply",
-    title: "📝 同步回覆",
-    x: 0,
-    y: 18,
-    w: 100,
-    h: 4,
-    visible: true,
-    collapsed: false,
-  },
 ]);
 
 // 分頁配置：昨、今、明 + 未來 5 天
@@ -1023,6 +1013,7 @@ function switchMenu(menuId) {
 
 const menuItems = [
   { id: "dashboard", icon: "📊", label: "儀表板" },
+  { id: "sync-reply", icon: "📝", label: "同步回覆" },
   { id: "rooms", icon: "🏨", label: "房況監控" },
   { id: "bookings", icon: "📅", label: "訂單管理" },
   { id: "guests", icon: "👥", label: "旅客資料" },
@@ -1621,68 +1612,59 @@ const statusIcons = {
         </div>
       </div>
 
-      <!-- 📝 同步回覆面板 -->
-      <div
-        v-if="widgets.find(w => w.id === 'sync-reply')?.visible"
-        class="gs-18 grid-stack-item"
-        gs-id="sync-reply"
-        :gs-x="widgets.find(w => w.id === 'sync-reply')?.x"
-        :gs-y="widgets.find(w => w.id === 'sync-reply')?.y"
-        :gs-w="widgets.find(w => w.id === 'sync-reply')?.w"
-        :gs-h="widgets.find(w => w.id === 'sync-reply')?.h"
-      >
-        <div class="grid-stack-item-content sync-reply-panel">
-          <div class="widget-header widget-handle">
-            <span class="widget-title">📝 同步回覆（手動回覆記錄）</span>
-            <button class="collapse-btn" @click="fetchChatUsers">🔄</button>
+      <!-- 📝 同步回覆專區 -->
+      <div v-else-if="activeMenu === 'sync-reply'" class="sync-reply-page">
+        <div class="sync-reply-panel">
+          <div class="sync-page-header">
+            <h3>📝 同步回覆</h3>
+            <p class="sync-page-desc">在 LINE OA Manager 手動回覆客人後，在此記錄回覆內容，讓 AI 下次對話能看到完整脈絡。</p>
+            <button class="sync-refresh-btn" @click="fetchChatUsers">🔄 重新整理</button>
           </div>
-          <div class="widget-body">
-            <div class="sync-reply-container">
-              <!-- 客人選擇列表 -->
-              <div class="sync-reply-users">
-                <div class="sync-reply-label">選擇客人：</div>
-                <div v-if="chatUsersLoading" class="empty-text">載入中...</div>
-                <div v-else-if="chatUsers.length === 0" class="empty-text">
-                  尚無客人記錄
-                  <button class="sync-load-btn" @click="fetchChatUsers">載入客人列表</button>
-                </div>
-                <div v-else class="sync-user-list">
-                  <div
-                    v-for="u in chatUsers"
-                    :key="u.user_id"
-                    class="sync-user-item"
-                    :class="{ active: selectedUserId === u.user_id }"
-                    @click="selectedUserId = u.user_id"
-                  >
-                    <span class="sync-user-name">{{ u.display_name }}</span>
-                    <span class="sync-user-time">{{ formatLastActivity(u.last_activity) }}</span>
-                  </div>
+          <div class="sync-reply-container">
+            <!-- 客人選擇列表 -->
+            <div class="sync-reply-users">
+              <div class="sync-reply-label">選擇客人（最新對話優先）</div>
+              <div v-if="chatUsersLoading" class="empty-text">載入中...</div>
+              <div v-else-if="chatUsers.length === 0" class="empty-text">
+                尚無客人記錄
+                <button class="sync-load-btn" @click="fetchChatUsers">載入客人列表</button>
+              </div>
+              <div v-else class="sync-user-list">
+                <div
+                  v-for="u in chatUsers"
+                  :key="u.user_id"
+                  class="sync-user-item"
+                  :class="{ active: selectedUserId === u.user_id }"
+                  @click="selectedUserId = u.user_id"
+                >
+                  <span class="sync-user-name">{{ u.display_name }}</span>
+                  <span class="sync-user-time">{{ formatLastActivity(u.last_activity) }}</span>
                 </div>
               </div>
-              <!-- 回覆輸入 -->
-              <div class="sync-reply-input" v-if="selectedUserId">
-                <div class="sync-reply-target">回覆給：<strong>{{ selectedUserName }}</strong></div>
-                <textarea
-                  v-model="syncReplyMessage"
-                  placeholder="輸入你在 LINE OA Manager 回覆客人的內容..."
-                  rows="3"
-                  class="sync-textarea"
-                ></textarea>
-                <div class="sync-reply-actions">
-                  <button
-                    class="sync-submit-btn"
-                    :disabled="!syncReplyMessage.trim() || syncReplyStatus === 'sending'"
-                    @click="syncReply"
-                  >
-                    {{ syncReplyStatus === 'sending' ? '記錄中...' : '📝 記錄回覆' }}
-                  </button>
-                  <span v-if="syncReplyStatus === 'success'" class="sync-success">✅ 已記錄，AI 下次對話能看到</span>
-                  <span v-if="syncReplyStatus === 'error'" class="sync-error">❌ 記錄失敗</span>
-                </div>
+            </div>
+            <!-- 回覆輸入 -->
+            <div class="sync-reply-input" v-if="selectedUserId">
+              <div class="sync-reply-target">回覆給：<strong>{{ selectedUserName }}</strong></div>
+              <textarea
+                v-model="syncReplyMessage"
+                placeholder="輸入你在 LINE OA Manager 回覆客人的內容..."
+                rows="5"
+                class="sync-textarea"
+              ></textarea>
+              <div class="sync-reply-actions">
+                <button
+                  class="sync-submit-btn"
+                  :disabled="!syncReplyMessage.trim() || syncReplyStatus === 'sending'"
+                  @click="syncReply"
+                >
+                  {{ syncReplyStatus === 'sending' ? '記錄中...' : '📝 記錄回覆' }}
+                </button>
+                <span v-if="syncReplyStatus === 'success'" class="sync-success">✅ 已記錄，AI 下次對話能看到</span>
+                <span v-if="syncReplyStatus === 'error'" class="sync-error">❌ 記錄失敗</span>
               </div>
-              <div class="sync-reply-hint" v-else>
-                👈 請先選擇要同步回覆的客人
-              </div>
+            </div>
+            <div class="sync-reply-hint" v-else>
+              👈 請先從左側選擇要同步回覆的客人
             </div>
           </div>
         </div>
