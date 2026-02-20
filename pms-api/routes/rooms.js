@@ -137,7 +137,11 @@ router.get('/today-availability', async (req, res) => {
                     NVL(r.ROOM_QNT, 0) as total_rooms,
                     NVL(p2.RENT_AMT, 0) as base_price,
                     NVL(sd.ITEM_AMT, 0) as surcharge,
-                    NVL(rf.ROOM_QNT, 0) as total_rooms_rf,
+                    NVL((
+                        SELECT COUNT(*)
+                        FROM GDWUUKT.ROOM_MN rm2
+                        WHERE TRIM(rm2.ROOM_COD) = TRIM(w.ROOM_COD)
+                    ), 0) as total_rooms_count,
                     NVL((
                         SELECT COUNT(*)
                         FROM GDWUUKT.ROOM_MN rm
