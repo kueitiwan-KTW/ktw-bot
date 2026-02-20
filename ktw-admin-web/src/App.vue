@@ -246,12 +246,36 @@ async function fetchAllGuestTabs() {
 // ============================================
 const chatUsers = ref([]);
 const chatUsersLoading = ref(false);
+const todayCheckinUsers = ref([]);
+const todayCheckinLoading = ref(false);
 const selectedUserId = ref(null);
 const syncReplyMessage = ref('');
 const syncReplyStatus = ref(null); // null | 'sending' | 'success' | 'error'
 
+// 取得當日入住客人的 LINE 資訊
+async function fetchTodayCheckinUsers() {
+  todayCheckinLoading.value = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/today-checkin-users`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        todayCheckinUsers.value = result.data || [];
+      }
+    }
+  } catch (error) {
+    console.error('取得當日入住客人失敗:', error);
+  } finally {
+    todayCheckinLoading.value = false;
+  }
+}
+
 async function fetchChatUsers() {
   chatUsersLoading.value = true;
+  // 同時載入當日入住客人
+  fetchTodayCheckinUsers();
   try {
     const res = await fetch(`${API_BASE}/api/chat/users`, {
       signal: AbortSignal.timeout(5000),
@@ -1680,6 +1704,24 @@ const statusIcons = {
           <div class="sync-reply-container">
             <!-- 客人選擇列表 -->
             <div class="sync-reply-users">
+              <!-- 當日入住客人區塊 -->
+              <div class="sync-reply-label today-checkin-label">🏨 當日入住客人</div>
+              <div v-if="todayCheckinLoading" class="empty-text">載入中...</div>
+              <div v-else-if="todayCheckinUsers.length === 0" class="empty-text today-checkin-empty">今日無可匹配的 LINE 客人</div>
+              <div v-else class="sync-user-list today-checkin-list">
+                <div
+                  v-for="u in todayCheckinUsers"
+                  :key="'checkin-' + u.user_id"
+                  class="sync-user-item today-checkin-item"
+                  :class="{ active: selectedUserId === u.user_id }"
+                  @click="selectedUserId = u.user_id"
+                >
+                  <span class="sync-user-name">{{ u.display_name }}</span>
+                  <span class="sync-user-badge" v-if="u.room_info">{{ u.room_info }}</span>
+                  <span class="sync-user-badge" v-else-if="u.room_type">{{ u.room_type }}</span>
+                </div>
+              </div>
+              <!-- 原有客人列表 -->
               <div class="sync-reply-label">選擇客人（最新對話優先）</div>
               <div v-if="chatUsersLoading" class="empty-text">載入中...</div>
               <div v-else-if="chatUsers.length === 0" class="empty-text">

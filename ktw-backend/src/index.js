@@ -1094,6 +1094,67 @@ app.post('/api/user-orders', async (req, res) => {
 // Bot 的 chat_logs 目錄路徑
 const CHAT_LOGS_DIR = join(__dirname, '../../data/chat_logs');
 
+// 取得今日入住客人的 LINE 資訊（供同步回覆頁面使用）
+app.get('/api/chat/today-checkin-users', async (req, res) => {
+    try {
+        const guestOrders = getGuestOrders();
+        const profiles = getUserProfiles();
+        
+        // 從 PMS API 取得今日入住客人
+        const pmsRes = await fetch('http://192.168.8.3:3000/api/bookings/today-checkin', {
+            signal: AbortSignal.timeout(5000)
+        });
+        
+        if (!pmsRes.ok) {
+            return res.json({ success: true, data: [] });
+        }
+        
+        const pmsData = await pmsRes.json();
+        if (!pmsData.success || !pmsData.data) {
+            return res.json({ success: true, data: [] });
+        }
+        
+        // 處理每位客人，找出有 LINE 關聯的
+        const checkinUsers = [];
+        for (const booking of pmsData.data) {
+            const botInfo = matchGuestOrder(booking, guestOrders);
+            if (!botInfo?.line_user_id) continue; // 沒有 LINE 關聯就跳過
+            
+            const userId = botInfo.line_user_id;
+            const profile = profiles[userId];
+            const displayName = profile?.display_name 
+                || (typeof profile === 'string' ? profile : null)
+                || botInfo.line_display_name
+                || booking.guest_name
+                || '未知';
+            
+            // 避免重複（同一 LINE 用戶可能有多筆訂單）
+            if (checkinUsers.find(u => u.user_id === userId)) continue;
+            
+            // 組合房型資訊
+            let roomInfo = '';
+            if (booking.rooms?.length > 0) {
+                const roomNums = booking.rooms.map(r => r.room_number).filter(Boolean);
+                roomInfo = roomNums.length > 0 ? roomNums.join(',') : '';
+            }
+            
+            checkinUsers.push({
+                user_id: userId,
+                display_name: displayName,
+                guest_name: booking.guest_name || '',
+                room_info: roomInfo,
+                room_type: booking.rooms?.[0]?.room_type_code || '',
+                check_in_date: booking.check_in_date
+            });
+        }
+        
+        res.json({ success: true, data: checkinUsers });
+    } catch (error) {
+        console.error('取得今日入住 LINE 客人失敗:', error);
+        res.json({ success: true, data: [] }); // 失敗不影響主功能
+    }
+});
+
 // 取得客人列表（按最新對話時間排序）
 app.get('/api/chat/users', (req, res) => {
     try {
