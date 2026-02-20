@@ -141,6 +141,7 @@ router.get('/today-availability', async (req, res) => {
                         SELECT COUNT(*)
                         FROM GDWUUKT.ROOM_MN rm2
                         WHERE TRIM(rm2.ROOM_COD) = TRIM(w.ROOM_COD)
+                          AND NVL(TRIM(rm2.OOS_STA), 'N') != 'Y'
                     ), 0) as total_rooms_count,
                     NVL((
                         SELECT COUNT(*)
