@@ -137,6 +137,7 @@ router.get('/today-availability', async (req, res) => {
                     NVL(r.ROOM_QNT, 0) as total_rooms,
                     NVL(p2.RENT_AMT, 0) as base_price,
                     NVL(sd.ITEM_AMT, 0) as surcharge,
+                    NVL(rf.ROOM_QNT, 0) as total_rooms_rf,
                     NVL((
                         SELECT COUNT(*)
                         FROM GDWUUKT.ROOM_MN rm
@@ -180,7 +181,7 @@ router.get('/today-availability', async (req, res) => {
                 .filter(row => {
                     const webAvailable = row[4] || 0;  // web_available
                     const localStock = row[5] || 0;    // local_stock
-                    const cleanVacant = row[9] || 0;   // clean_vacant_count
+                    const cleanVacant = row[10] || 0;  // clean_vacant_count
                     const hasInventory = webAvailable > 0 || localStock > 0;
                     if (!hasInventory) return false;
                     // 14:00 後需至少有一間乾淨空房
@@ -191,17 +192,23 @@ router.get('/today-availability', async (req, res) => {
                     const basePrice = row[7] || 0;
                     const surcharge = row[8] || 0;
                     const inventoryCount = (row[4] || 0) + (row[5] || 0);
-                    const cleanVacant = row[9] || 0;
+                    const cleanVacant = row[10] || 0;  // 因為新增了 total_rooms_rf，index 往後移 1
+                    const totalRooms = row[9] || 0;    // ROOM_RF.ROOM_QNT 總房數
                     // 14:00 後：可用數 = MIN(庫存, 乾淨空房)；14:00 前：可用數 = 庫存
-                    const effectiveCount = useCleanFilter
+                    let effectiveCount = useCleanFilter
                         ? Math.min(inventoryCount, cleanVacant)
                         : inventoryCount;
+                    // 不得超過該房型的總房間數
+                    if (totalRooms > 0) {
+                        effectiveCount = Math.min(effectiveCount, totalRooms);
+                    }
                     return {
                         room_type_code: row[0],
                         room_type_name: row[1] || row[0],
                         web_available: row[4] || 0,
                         local_stock: row[5] || 0,
                         available_count: effectiveCount,
+                        total_rooms: totalRooms,
                         clean_vacant: cleanVacant,
                         clean_filter_active: useCleanFilter,
                         price: basePrice + surcharge,       // 總價（基準 + 加價）
