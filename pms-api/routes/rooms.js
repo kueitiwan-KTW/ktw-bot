@@ -141,8 +141,13 @@ router.get('/today-availability', async (req, res) => {
                         SELECT COUNT(*)
                         FROM GDWUUKT.ROOM_MN rm2
                         WHERE TRIM(rm2.ROOM_COD) = TRIM(w.ROOM_COD)
-                          AND NVL(TRIM(rm2.OOS_STA), 'N') != 'Y'
-                    ), 0) as total_rooms_count,
+                    ), 0) as total_rooms_all,
+                    NVL((
+                        SELECT COUNT(*)
+                        FROM GDWUUKT.ROOM_MN rm3
+                        WHERE TRIM(rm3.ROOM_COD) = TRIM(w.ROOM_COD)
+                          AND NVL(TRIM(rm3.OOS_STA), 'N') != 'Y'
+                    ), 0) as usable_rooms,
                     NVL((
                         SELECT COUNT(*)
                         FROM GDWUUKT.ROOM_MN rm
@@ -186,7 +191,7 @@ router.get('/today-availability', async (req, res) => {
                 .filter(row => {
                     const webAvailable = row[4] || 0;  // web_available
                     const localStock = row[5] || 0;    // local_stock
-                    const cleanVacant = row[10] || 0;  // clean_vacant_count
+                    const cleanVacant = row[11] || 0;  // clean_vacant_count
                     const hasInventory = webAvailable > 0 || localStock > 0;
                     if (!hasInventory) return false;
                     // 14:00 後需至少有一間乾淨空房
@@ -197,15 +202,16 @@ router.get('/today-availability', async (req, res) => {
                     const basePrice = row[7] || 0;
                     const surcharge = row[8] || 0;
                     const inventoryCount = (row[4] || 0) + (row[5] || 0);
-                    const cleanVacant = row[10] || 0;  // 因為新增了 total_rooms_rf，index 往後移 1
-                    const totalRooms = row[9] || 0;    // ROOM_RF.ROOM_QNT 總房數
+                    const totalRoomsAll = row[9] || 0;  // 總庫（含停用）
+                    const usableRooms = row[10] || 0;   // 非停用房間數
+                    const cleanVacant = row[11] || 0;    // 乾淨空房數
                     // 14:00 後：可用數 = MIN(庫存, 乾淨空房)；14:00 前：可用數 = 庫存
                     let effectiveCount = useCleanFilter
                         ? Math.min(inventoryCount, cleanVacant)
                         : inventoryCount;
-                    // 不得超過該房型的總房間數
-                    if (totalRooms > 0) {
-                        effectiveCount = Math.min(effectiveCount, totalRooms);
+                    // 不得超過非停用房間數
+                    if (usableRooms > 0) {
+                        effectiveCount = Math.min(effectiveCount, usableRooms);
                     }
                     return {
                         room_type_code: row[0],
@@ -213,7 +219,7 @@ router.get('/today-availability', async (req, res) => {
                         web_available: row[4] || 0,
                         local_stock: row[5] || 0,
                         available_count: effectiveCount,
-                        total_rooms: totalRooms,
+                        total_rooms: totalRoomsAll,
                         clean_vacant: cleanVacant,
                         clean_filter_active: useCleanFilter,
                         price: basePrice + surcharge,       // 總價（基準 + 加價）
