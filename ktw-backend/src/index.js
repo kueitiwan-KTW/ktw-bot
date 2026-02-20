@@ -13,9 +13,10 @@ import { getBookingSource } from './helpers/bookingSource.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-dotenv.config({ path: join(__dirname, '../.env') });
+// 先載入 ktw-bot 根目錄 .env（含 LINE_CHANNEL_ACCESS_TOKEN 等主要設定）
+dotenv.config({ path: join(__dirname, '../../.env') });
 
-// 載入 ktw-backend 專用 .env
+// 載入 ktw-backend 專用 .env（可覆蓋根目錄設定）
 dotenv.config({ path: join(__dirname, '../.env') });
 
 const app = express();
