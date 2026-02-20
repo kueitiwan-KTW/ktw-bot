@@ -168,22 +168,34 @@ router.get('/today-availability', async (req, res) => {
                 cmd_option: dayType === 'N' ? 'NONE' : ('H' + dayType)
             });
 
-            // 過濾出有庫存且有乾淨空房的房型
+            // 取得伺服器當前小時（用 Oracle SYSDATE 校正時區）
+            const hourResult = await connection.execute(`
+                SELECT TO_NUMBER(TO_CHAR(SYSDATE, 'HH24')) as current_hour FROM DUAL
+            `);
+            const currentHour = hourResult.rows[0][0];
+            const useCleanFilter = currentHour >= 14;  // 14:00 後才啟用清潔過濾
+
+            // 過濾出有庫存的房型（14:00 後額外檢查乾淨空房）
             const availableRoomTypes = result.rows
                 .filter(row => {
                     const webAvailable = row[4] || 0;  // web_available
                     const localStock = row[5] || 0;    // local_stock
                     const cleanVacant = row[9] || 0;   // clean_vacant_count
-                    // 庫存 > 0 且至少有一間乾淨空房
-                    return (webAvailable > 0 || localStock > 0) && cleanVacant > 0;
+                    const hasInventory = webAvailable > 0 || localStock > 0;
+                    if (!hasInventory) return false;
+                    // 14:00 後需至少有一間乾淨空房
+                    if (useCleanFilter && cleanVacant <= 0) return false;
+                    return true;
                 })
                 .map(row => {
                     const basePrice = row[7] || 0;
                     const surcharge = row[8] || 0;
                     const inventoryCount = (row[4] || 0) + (row[5] || 0);
                     const cleanVacant = row[9] || 0;
-                    // 可用數 = MIN(庫存數, 乾淨空房數)
-                    const effectiveCount = Math.min(inventoryCount, cleanVacant);
+                    // 14:00 後：可用數 = MIN(庫存, 乾淨空房)；14:00 前：可用數 = 庫存
+                    const effectiveCount = useCleanFilter
+                        ? Math.min(inventoryCount, cleanVacant)
+                        : inventoryCount;
                     return {
                         room_type_code: row[0],
                         room_type_name: row[1] || row[0],
@@ -191,6 +203,7 @@ router.get('/today-availability', async (req, res) => {
                         local_stock: row[5] || 0,
                         available_count: effectiveCount,
                         clean_vacant: cleanVacant,
+                        clean_filter_active: useCleanFilter,
                         price: basePrice + surcharge,       // 總價（基準 + 加價）
                         base_price: basePrice,              // 基準價（含早）
                         surcharge: surcharge,               // 日類型加價
