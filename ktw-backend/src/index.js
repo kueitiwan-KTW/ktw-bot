@@ -1296,6 +1296,47 @@ app.get('/api/chat/sync-history/:user_id', (req, res) => {
     }
 });
 
+// 取得特定客人的最後 N 段對話（所有角色：客人、AI、管理員）
+app.get('/api/chat/recent/:user_id', (req, res) => {
+    try {
+        const { user_id } = req.params;
+        const count = parseInt(req.query.count) || 3;
+        const logPath = join(CHAT_LOGS_DIR, `${user_id}.txt`);
+        
+        if (!existsSync(logPath)) {
+            return res.json({ success: true, data: [] });
+        }
+        
+        const content = readFileSync(logPath, 'utf-8');
+        const entries = [];
+        
+        // 解析日誌，用分隔線切割每個條目
+        const blocks = content.split(/^-{20,}$/m);
+        for (const block of blocks) {
+            const trimmed = block.trim();
+            if (!trimmed) continue;
+            
+            // 解析格式：[timestamp] 【角色】\n內容
+            const match = trimmed.match(/\[(.+?)\]\s*【(.+?)】\n([\s\S]*)/);
+            if (match) {
+                entries.push({
+                    timestamp: match[1].trim(),
+                    role: match[2].trim(),
+                    message: match[3].trim(),
+                });
+            }
+        }
+        
+        // 取最後 N 段
+        const recent = entries.slice(-count);
+        
+        res.json({ success: true, data: recent });
+    } catch (error) {
+        console.error('取得最近對話失敗:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // ============================================
 // 即時推送 API (給 Bot 呼叫)
 // ============================================

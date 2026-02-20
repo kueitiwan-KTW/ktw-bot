@@ -2382,3 +2382,52 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* 最近對話區塊 */
+.recent-messages {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.recent-messages-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #8ab4f8;
+  margin-bottom: 8px;
+}
+
+.recent-msg-item {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 3px solid #555;
+}
+
+.recent-msg-item.msg-guest { border-left-color: #4caf50; }
+.recent-msg-item.msg-ai { border-left-color: #8ab4f8; }
+.recent-msg-item.msg-admin { border-left-color: #ff9800; }
+
+.recent-msg-role {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #aaa;
+  margin-bottom: 3px;
+}
+
+.recent-msg-time {
+  font-weight: 400;
+  color: #666;
+  margin-left: 8px;
+}
+
+.recent-msg-content {
+  font-size: 0.85rem;
+  color: #ddd;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

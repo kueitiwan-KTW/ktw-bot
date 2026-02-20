@@ -347,9 +347,34 @@ async function fetchSyncHistory(userId) {
   }
 }
 
-// 選中客人時自動載入歷史
+// 最後 3 段對話（所有角色）
+const recentMessages = ref([]);
+const recentMessagesLoading = ref(false);
+
+async function fetchRecentMessages(userId) {
+  if (!userId) { recentMessages.value = []; return; }
+  recentMessagesLoading.value = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/recent/${userId}?count=3`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        recentMessages.value = result.data || [];
+      }
+    }
+  } catch (error) {
+    console.error('取得最近對話失敗:', error);
+  } finally {
+    recentMessagesLoading.value = false;
+  }
+}
+
+// 選中客人時自動載入歷史和最近對話
 watch(selectedUserId, (newId) => {
   fetchSyncHistory(newId);
+  fetchRecentMessages(newId);
 });
 
 // ============================================
@@ -1677,6 +1702,17 @@ const statusIcons = {
             <!-- 回覆輸入 -->
             <div class="sync-reply-input" v-if="selectedUserId">
               <div class="sync-reply-target">回覆給：<strong>{{ selectedUserName }}</strong></div>
+              <!-- 最近對話 -->
+              <div class="recent-messages" v-if="recentMessages.length > 0 || recentMessagesLoading">
+                <div class="recent-messages-title">💬 最近對話</div>
+                <div v-if="recentMessagesLoading" class="empty-text">載入中...</div>
+                <div v-else class="recent-messages-list">
+                  <div v-for="(m, i) in recentMessages" :key="i" class="recent-msg-item" :class="{ 'msg-guest': m.role.includes('客人'), 'msg-ai': m.role.includes('AI') || m.role.includes('助理'), 'msg-admin': m.role.includes('管理員') }">
+                    <div class="recent-msg-role">{{ m.role }} <span class="recent-msg-time">{{ m.timestamp }}</span></div>
+                    <div class="recent-msg-content">{{ m.message.slice(0, 200) }}{{ m.message.length > 200 ? '...' : '' }}</div>
+                  </div>
+                </div>
+              </div>
               <textarea
                 v-model="syncReplyMessage"
                 placeholder="輸入你在 LINE OA Manager 回覆客人的內容..."
