@@ -572,23 +572,41 @@ class SameDayBookingHandler:
         except Exception as e:
             print(f"⚠️ 漸進式暫存失敗: {e}")
         
-        # 從 API 獲取今日房價
+        # 從 API 獲取今日房價和庫存
         result = self.pms_client.get_today_availability()
         api_prices = {}
+        api_available = {}  # 各房型可用數量
         if result and result.get('success'):
             for room in result.get('data', {}).get('available_room_types', []):
-                api_prices[room.get('room_type_code')] = room.get('price', 0)
+                code = room.get('room_type_code')
+                api_prices[code] = room.get('price', 0)
+                api_available[code] = room.get('available_count', 0)
         
         self.state_machine.transition(user_id, self.state_machine.STATE_BOOKING_SHOW_ROOMS)
         
-        # 顯示房型列表（使用 API 價格）
+        # 顯示有庫存的房型列表（使用 API 價格）
         room_list = []
         for room in self.AVAILABLE_ROOMS:
             capacity = room['capacity']
+            # 檢查該房型（含可升等房型）的庫存
+            upgradable_codes = self.UPGRADABLE_ROOMS.get(capacity, [room['code']])
+            total_stock = sum(api_available.get(code, 0) for code in upgradable_codes)
+            
+            if total_stock <= 0:
+                continue  # 無庫存，不顯示
+            
             # 優先使用 API 價格，否則用預設價格
             price = api_prices.get(room['code'], room['price'])
             session[f"price_{room['code']}"] = price  # 保存價格到 session
             room_list.append(f"{capacity}. {room['name']} - NT${price:,}/晚（含早餐）")
+        
+        # 如果所有房型都沒庫存
+        if not room_list:
+            self.clear_session(user_id)
+            return """抱歉，今日所有房型均已客滿。
+
+建議您可以查看其他日期的空房：
+🌐 https://ktwhotel.com/2cTrT"""
         
         return f"""📋 今日可預訂房型：
 
