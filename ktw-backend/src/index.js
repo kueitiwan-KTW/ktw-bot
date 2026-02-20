@@ -1136,6 +1136,53 @@ app.get('/api/chat/users', (req, res) => {
 
 // 同步管理員手動回覆到客人的對話日誌（可選同時 LINE Push 發送）
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+
+// AI 潤稿：保持原意，修飾語氣讓訊息更專業、親切
+async function polishMessage(rawMessage) {
+    if (!GOOGLE_API_KEY) return rawMessage;
+    try {
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `你是飯店客服訊息潤稿助手。請將以下管理員的回覆訊息修飾成專業、親切、禮貌的客服語氣。
+規則：
+1. 保持原意不變，不要添加管理員沒說的資訊
+2. 使用繁體中文
+3. 語氣溫暖專業，像高級飯店客服
+4. 不要加任何前綴標題或簽名（如「您好」開頭就好，不需要「【飯店名】」）
+5. 簡潔有力，不要冗長
+6. 只回傳修飾後的訊息，不要加任何解釋
+
+管理員原始訊息：
+${rawMessage}`
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.3,
+                        maxOutputTokens: 500,
+                    }
+                }),
+            }
+        );
+        if (res.ok) {
+            const data = await res.json();
+            const polished = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (polished) {
+                console.log(`🤖 AI 潤稿：「${rawMessage.slice(0, 30)}...」→「${polished.slice(0, 30)}...」`);
+                return polished;
+            }
+        }
+    } catch (err) {
+        console.error('AI 潤稿失敗，使用原始訊息:', err.message);
+    }
+    return rawMessage;
+}
 
 app.post('/api/chat/sync-reply', async (req, res) => {
     try {
@@ -1150,7 +1197,10 @@ app.post('/api/chat/sync-reply', async (req, res) => {
         
         // 如果要同時 LINE Push 發送
         let lineSent = false;
+        let polishedMessage = message;
         if (send_line && LINE_CHANNEL_ACCESS_TOKEN) {
+            // AI 潤稿後再發送
+            polishedMessage = await polishMessage(message);
             try {
                 const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
                     method: 'POST',
@@ -1160,7 +1210,7 @@ app.post('/api/chat/sync-reply', async (req, res) => {
                     },
                     body: JSON.stringify({
                         to: user_id,
-                        messages: [{ type: 'text', text: message }],
+                        messages: [{ type: 'text', text: polishedMessage }],
                     }),
                 });
                 lineSent = pushRes.ok;
