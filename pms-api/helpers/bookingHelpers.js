@@ -27,7 +27,8 @@ function getStatusName(statusCode) {
 }
 
 /**
- * 查詢訂單的房價總額（從 ORDER_DT.RENT_AMT 加總）
+ * 查詢訂單的房價總額（從 ORDER_DT.RENT_TOT 加總）
+ * 注意：RENT_TOT = 租金總額（已乘以晚數），RENT_AMT = 單晚房價
  * @param {Object} connection - 資料庫連線
  * @param {string} bookingId - 訂單編號
  * @returns {Promise<number>} 房價總額
@@ -35,7 +36,7 @@ function getStatusName(statusCode) {
 async function getRoomTotal(connection, bookingId) {
     try {
         const result = await connection.execute(
-            `SELECT NVL(SUM(RENT_AMT), 0) as total
+            `SELECT NVL(SUM(RENT_TOT), 0) as total
              FROM GDWUUKT.ORDER_DT
              WHERE TRIM(IKEY) = :booking_id`,
             { booking_id: bookingId }
