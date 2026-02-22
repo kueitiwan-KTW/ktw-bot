@@ -530,10 +530,13 @@ class OrderQueryHandler(BaseHandler):
         phone = session.get('phone', '未提供')
         special = '、'.join(session.get('special_requests', [])) or '無'
         
+        # 訂單編號：OTA ID 優先（英數混合），無則用 PMS 內部 ID
+        display_order_id = order_data.get('ota_booking_id') or order_data.get('order_id', '未知')
+        
         response = f"""✅ 已為您完成預訂資訊確認！
 
 📋 預訂摘要：
-• 訂單編號: {order_data.get('order_id', '未知')}
+• 訂單編號: {display_order_id}
 • 入住日期: {order_data.get('check_in', '未知')}
 • 聯絡電話: {phone}
 • 預計抵達: {arrival_time}

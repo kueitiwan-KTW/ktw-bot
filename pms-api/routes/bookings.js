@@ -108,7 +108,8 @@ router.get('/search', async (req, res) => {
                 binds.phone = phone;
             }
 
-            sql += ` ORDER BY om.CI_DAT DESC FETCH FIRST 50 ROWS ONLY`;
+            // 排除已取消訂單 (D/C)，優先顯示未來入住
+            sql += ` AND om.ORDER_STA NOT IN ('D', 'C') ORDER BY om.CI_DAT DESC FETCH FIRST 50 ROWS ONLY`;
 
             const result = await connection.execute(sql, binds);
 

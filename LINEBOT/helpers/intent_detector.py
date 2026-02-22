@@ -244,17 +244,24 @@ class IntentDetector:
         """
         檢測確認意圖（是/對/沒錯）
         
+        排除禮貌用語（謝謝、感謝等），避免客人道謝被誤判為確認。
+        
         Args:
             message: 用戶訊息
             
         Returns:
             True 如果是確認
         """
+        # 排除禮貌用語（不應視為確認）
+        polite_words = ['謝謝', '感謝', '謝了', '辛苦', '麻煩', '拜託', '多謝', '3q', 'thanks', 'thank']
+        message_lower = message.lower().strip()
+        if any(pw in message_lower for pw in polite_words):
+            return False
+        
         keywords = [
             '是', '對', '沒錯', '正確', '確認', 'yes', '好', 'ok', 'OK', 'Yes'
         ]
         # 完全匹配或包含在短訊息中
-        message_lower = message.lower().strip()
         return message_lower in keywords or any(kw in message and len(message) <= 10 for kw in keywords)
     
     @staticmethod

@@ -457,10 +457,80 @@ ORDER BY BEGIN_DAT DESC
 - **ID_NOS**: 身分證號
 - **ORDER_NOS**: 關聯訂單號（如有）
 
-### ROOM_RF - 房型參考表
+### ROOM_RF - 房型參考表（大類）
 
-- **ROOM_TYP**: 房型代碼 (如 DD, SD, ST)
-- **ROOM_NAM**: 房型名稱
+- **ROOM_TYP**: 房型大類代碼 (如 DEF:DEFAULT)
+- **ROOM_NAM**: 大類名稱
+- ⚠️ **ROOM_QNT 未被維護（全部 0），不要用**
+
+---
+
+## RVRMCOD_RF - 房間小類對照表 ⭐
+
+> **PMS 前端表單**：`w_hfd01t0020`（房間大類 `DEF:DEFAULT` 下）
+>
+> **用途**：每個房型的初始設定（名稱、代碼、總房數、房價…），建置新飯店時的第一張設定表
+>
+> **特點**：同一房型可有多筆記錄（不同日期區間），查詢時需用 `SYSDATE BETWEEN BEGIN_DAT AND END_DAT` 篩選
+
+### 關鍵欄位
+
+| 欄位名 | 類型 | 說明 | 備註 |
+|--------|------|------|------|
+| **HOTEL_COD** | NCHAR(12) | 館別代碼 | 固定 '01' |
+| **ROOM_COD** | NCHAR(12) | 房型代碼 | SD, CD, WD... |
+| **BEGIN_DAT** | DATE | 開始日期 | 生效起始 |
+| **END_DAT** | DATE | 結束日期 | 生效截止 |
+| **ROOM_TYP** | NCHAR(12) | 房間大類 | DEF:DEFAULT |
+| **ROOM_NAM** | NVARCHAR2 | 房型名稱 | 海景雙人房 |
+| **ROOM_ENG** | NVARCHAR2 | 英文名稱 | Double Room, Ocean View |
+| **ROOM_SNA** | NVARCHAR2 | 簡稱 | |
+| **ROOM_QNT** | NUMBER | ⭐ **隔數（總房間數）** | Bot 庫存上限來源 |
+| **OVER_QNT** | NUMBER | 可超訂數量 | |
+| **ROOM_AMT** | NUMBER | 標準房價 | |
+| **SERV_AMT** | NUMBER | 標準服務費 | |
+| **DEFAULT_ADULT_QNT** | NUMBER | 預定大人數 | |
+| **DEFAULT_CHILD_QNT** | NUMBER | 預訂小孩數 | |
+| **DEFAULT_BABY_QNT** | NUMBER | 預設嬰兒數 | |
+| **MAX_GUEST_QNT** | NUMBER | 最大入住人數 | |
+
+### 當前有效記錄（2026/02/21 查詢）
+
+| 代碼 | 名稱 | 隔數 | 開始日期 | 結束日期 | 大人數 | 標準房價 | 服務費 |
+|------|------|:----:|---------|---------|:-----:|-------:|------:|
+| AD | 愛心雙人房 | **1** | 2019/08/05 | 2026/12/31 | 2 | 5,600 | 560 |
+| AQ | 愛心四人房 | **3** | 2019/08/05 | 2026/12/31 | 4 | 7,600 | 760 |
+| CD | 經典雙人房 | **4** | 2019/08/05 | 2026/12/31 | 2 | 7,200 | 720 |
+| CQ | 經典四人房 | **4** | 2018/12/05 | 2026/12/31 | 4 | 8,700 | 870 |
+| DD | 豪華雙人房 | **3** | 2019/08/05 | 2026/12/31 | 2 | 8,200 | 820 |
+| ED | 行政雙人房 | **4** | 2019/08/05 | 2026/12/31 | 2 | 8,200 | 820 |
+| FM | 親子家庭房 | **2** | 2018/12/04 | 2026/12/31 | 6 | 20,800 | 2,080 |
+| SD | 標準雙人房 | **6** | 2020/06/01 | 2026/12/31 | 2 | 4,600 | 460 |
+| SQ | 標準四人房 | **10** | 2020/06/01 | 2026/12/31 | 4 | 7,600 | 760 |
+| ST | 標準三人房 | **5** | 2020/06/01 | 2026/12/31 | 3 | 6,000 | 600 |
+| VD | VIP雙人套房 | **0** | 2019/08/05 | 2025/12/31 | 2 | 28,800 | 2,880 |
+| VQ | VIP四人套房 | **2** | 2019/08/05 | 2026/12/31 | 4 | 34,800 | 3,480 |
+| WD | 海景雙人房 | **4** | 2019/08/05 | 2026/12/31 | 2 | 8,800 | 880 |
+| WQ | 海景四人房 | **2** | 2019/08/05 | 2026/12/31 | 4 | 10,800 | 1,080 |
+
+### 查詢範例
+
+```sql
+-- 查詢當前有效的房型設定
+SELECT TO_CHAR(ROOM_COD), TO_CHAR(ROOM_NAM), ROOM_QNT, 
+       TO_CHAR(BEGIN_DAT,'YYYY/MM/DD'), TO_CHAR(END_DAT,'YYYY/MM/DD'),
+       DEFAULT_ADULT_QNT, ROOM_AMT, SERV_AMT
+FROM GDWUUKT.RVRMCOD_RF
+WHERE TRUNC(SYSDATE) BETWEEN BEGIN_DAT AND END_DAT
+ORDER BY ROOM_COD;
+
+-- 在 today-availability API 中取總房數
+SELECT rv.ROOM_QNT 
+FROM GDWUUKT.RVRMCOD_RF rv
+WHERE TRIM(rv.ROOM_COD) = :room_code
+  AND TRUNC(SYSDATE) BETWEEN rv.BEGIN_DAT AND rv.END_DAT
+  AND ROWNUM = 1;
+```
 
 ---
 

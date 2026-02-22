@@ -55,9 +55,15 @@ class ConversationStateMachine:
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self._sync_enabled = True  # 可透過環境變數關閉同步
     
+    # Session 超時時間（秒）：超過此時間未活動自動重置為 idle
+    SESSION_TIMEOUT_SECONDS = 2 * 60 * 60  # 2 小時
+    
     def get_session(self, user_id: str) -> Dict[str, Any]:
         """
         取得或建立用戶 session
+        
+        包含超時檢查：超過 2 小時未活動的非 idle session 自動重置，
+        避免客人隔天回覆時承接到舊流程。
         
         Args:
             user_id: LINE 用戶 ID
@@ -69,11 +75,50 @@ class ConversationStateMachine:
             # 先嘗試從 SQLite 載入
             persisted = self._load_from_backend(user_id)
             if persisted:
-                self.sessions[user_id] = persisted
-                print(f"📥 Session 從 SQLite 載入: {user_id} → {persisted.get('state')}")
+                # 超時檢查：超過 2 小時未活動自動重置
+                if self._is_session_expired(persisted):
+                    print(f"⏰ Session 已超時，自動重置: {user_id} (上次: {persisted.get('updated_at')})")
+                    self.reset_session(user_id)
+                    self.sessions[user_id] = self._create_default_session()
+                else:
+                    self.sessions[user_id] = persisted
+                    print(f"📥 Session 從 SQLite 載入: {user_id} → {persisted.get('state')}")
             else:
                 self.sessions[user_id] = self._create_default_session()
+        else:
+            # 記憶體中的 session 也要檢查超時
+            if self._is_session_expired(self.sessions[user_id]):
+                print(f"⏰ 記憶體 Session 已超時，自動重置: {user_id}")
+                self.reset_session(user_id)
+                self.sessions[user_id] = self._create_default_session()
         return self.sessions[user_id]
+    
+    def _is_session_expired(self, session: Dict[str, Any]) -> bool:
+        """
+        檢查 session 是否已超時
+        
+        只檢查非 idle 狀態的 session，idle 狀態不需要超時。
+        
+        Args:
+            session: session dict
+            
+        Returns:
+            True 如果已超時（超過 SESSION_TIMEOUT_SECONDS 秒）
+        """
+        state = session.get('state', self.STATE_IDLE)
+        if state == self.STATE_IDLE:
+            return False
+        
+        updated_at_str = session.get('updated_at')
+        if not updated_at_str:
+            return False
+        
+        try:
+            updated_at = datetime.fromisoformat(updated_at_str)
+            elapsed = (datetime.now() - updated_at).total_seconds()
+            return elapsed > self.SESSION_TIMEOUT_SECONDS
+        except (ValueError, TypeError):
+            return False
     
     def _create_default_session(self) -> Dict[str, Any]:
         """建立預設 session"""
