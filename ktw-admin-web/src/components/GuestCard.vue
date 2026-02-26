@@ -35,7 +35,7 @@
       <div class="detail-row">
         <span class="label">{{ t('guest_card.arrival_time') }}</span>
         <span class="value" :class="{ 'from-bot': guest.arrival_time_from_bot }">
-          {{ guest.arrival_time_from_bot || t('guest_card.not_provided') }}
+          {{ getTranslatedText(guest.arrival_time_from_bot) || t('guest_card.not_provided') }}
         </span>
       </div>
       <div class="detail-row">
