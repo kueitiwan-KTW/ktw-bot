@@ -1231,16 +1231,12 @@ body {
 
 .detail-row .label {
   color: #888;
-  flex: 0 0 auto;
-  max-width: 45%;
+  flex-shrink: 0;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .detail-row .value {
   text-align: right;
-  white-space: normal;
   overflow-wrap: break-word;
   word-break: break-word;
   flex: 1;
@@ -1249,15 +1245,9 @@ body {
   cursor: text;
 }
 
-/* 日期和金額不換行 */
-.detail-row .value.price,
-.detail-row .value:not(.from-bot) {
+/* 金額值不換行 */
+.detail-row .value.price {
   white-space: nowrap;
-}
-
-/* 長翻譯值允許換行 */
-.detail-row .value.from-bot {
-  white-space: normal;
 }
 
 .detail-row.special-request {
