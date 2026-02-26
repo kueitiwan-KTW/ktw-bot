@@ -1049,7 +1049,7 @@ body {
 }
 
 .from-bot {
-  color: #ce93d8;
+  color: #00d4ff;
 }
 
 /* 訂單狀態顏色 */
@@ -1247,9 +1247,9 @@ body {
   font-weight: 600;
 }
 
-/* Bot 提取的值（紫色標記）*/
+/* Bot 提取的值（與房號同色）*/
 .detail-row .value.from-bot {
-  color: #ce93d8;
+  color: #00d4ff;
   font-weight: 600;
 }
 
