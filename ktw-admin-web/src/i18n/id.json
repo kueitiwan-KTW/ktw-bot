@@ -147,5 +147,22 @@
     "label": "🌐 Bahasa",
     "zh_tw": "🇹🇼 繁中",
     "id": "🇮🇩 Indonesia"
+  },
+  "api": {
+    "status_new": "Pesanan Baru",
+    "status_confirmed": "Dikonfirmasi",
+    "status_checked_in": "Sudah Check-in",
+    "status_cancelled": "Dibatalkan",
+    "status_checked_out": "Sudah Check-out",
+    "status_no_show": "No Show",
+    "breakfast_included": "Termasuk Sarapan",
+    "breakfast_excluded": "Tanpa Sarapan",
+    "room_standard_double": "Kamar Double Standar",
+    "room_standard_triple": "Kamar Triple Standar",
+    "room_standard_quad": "Kamar Quad Standar",
+    "room_accessible_double": "Kamar Double Aksesibel",
+    "room_deluxe_double": "Kamar Double Deluxe",
+    "room_deluxe_quad": "Kamar Quad Deluxe",
+    "translating": "Menerjemahkan..."
   }
 }

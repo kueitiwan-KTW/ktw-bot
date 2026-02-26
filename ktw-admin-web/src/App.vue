@@ -5,11 +5,38 @@ import { setLocale } from "./i18n/index.js";
 import { GridStack } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import GuestCard from "./components/GuestCard.vue";
+import { translateApiValue, translateText, clearTranslationCache } from "./utils/translate.js";
 
 // i18n 翻譯函數（tm 用於取得陣列/物件型翻譯值）
 const { t, tm, locale } = useI18n();
 
 // 語言切換
+// 自由文字翻譯快取（reactive，翻譯完成後自動更新 UI）
+const freeTextCache = reactive({});
+
+/**
+ * 取得自由文字的翻譯結果
+ * 先顯示原文，背景呼叫 Google Translate API 翻譯完成後自動更新
+ */
+function getTranslatedText(text) {
+  if (!text || locale.value === 'zh-TW') return text;
+  const cacheKey = `${locale.value}:${text}`;
+  if (freeTextCache[cacheKey]) return freeTextCache[cacheKey];
+  // 先設定載入中，背景翻譯
+  freeTextCache[cacheKey] = text; // 先顯示原文
+  translateText(text, locale.value === 'id' ? 'id' : 'zh-TW').then(translated => {
+    freeTextCache[cacheKey] = translated;
+  });
+  return freeTextCache[cacheKey];
+}
+
+/**
+ * 翻譯 API 固定值（對照表翻譯）
+ */
+function tApi(value) {
+  return translateApiValue(value, t);
+}
+
 function switchLanguage(lang) {
   setLocale(lang);
 }
@@ -1632,16 +1659,16 @@ const statusIcons = {
                         <span class="ai-room-tag">{{ g.room_numbers?.join(', ') || $t('ai.not_assigned') }}</span>
                         <span class="ai-guest-name">{{ g.guest_name }}</span>
                         <span v-if="g.line_name" class="ai-line-name">({{ g.line_name }})</span>
-                        <span class="ai-status-badge" :class="'status-' + g.status_code">{{ g.status_name }}</span>
+                        <span class="ai-status-badge" :class="'status-' + g.status_code">{{ tApi(g.status_name) }}</span>
                       </div>
                       <div class="ai-needs-details">
                         <div v-if="g.special_request_from_bot" class="ai-need-row">
                           <span class="ai-need-tag bot">{{ $t('ai.tag_ai') }}</span>
-                          <span class="ai-need-text">{{ g.special_request_from_bot }}</span>
+                          <span class="ai-need-text">{{ getTranslatedText(g.special_request_from_bot) }}</span>
                         </div>
                         <div v-if="g.customer_remarks" class="ai-need-row">
                           <span class="ai-need-tag pms">{{ $t('ai.tag_pms') }}</span>
-                          <span class="ai-need-text">{{ g.customer_remarks }}</span>
+                          <span class="ai-need-text">{{ getTranslatedText(g.customer_remarks) }}</span>
                         </div>
                         <div v-if="g.staff_memo" class="ai-need-row">
                           <span class="ai-need-tag memo">{{ $t('ai.tag_counter') }}</span>

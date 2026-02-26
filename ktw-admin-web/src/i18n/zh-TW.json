@@ -147,5 +147,22 @@
     "label": "🌐 語言",
     "zh_tw": "🇹🇼 繁中",
     "id": "🇮🇩 Indonesia"
+  },
+  "api": {
+    "status_new": "新訂單",
+    "status_confirmed": "已確認",
+    "status_checked_in": "已入住",
+    "status_cancelled": "已取消",
+    "status_checked_out": "已退房",
+    "status_no_show": "No Show",
+    "breakfast_included": "有早餐",
+    "breakfast_excluded": "不含早餐",
+    "room_standard_double": "標準雙人房",
+    "room_standard_triple": "標準三人房",
+    "room_standard_quad": "標準四人房",
+    "room_accessible_double": "無障礙雙人房",
+    "room_deluxe_double": "豪華雙人房",
+    "room_deluxe_quad": "豪華四人房",
+    "translating": "翻譯中..."
   }
 }

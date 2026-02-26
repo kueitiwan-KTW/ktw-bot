@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-right">
-        <span class="guest-card-status" :class="'status-' + guest.status_code">{{ guest.status_name }}</span>
+        <span class="guest-card-status" :class="'status-' + guest.status_code">{{ tApi(guest.status_name) }}</span>
         <span class="expand-icon">{{ isExpanded ? '▲' : '▼' }}</span>
       </div>
     </div>
@@ -27,8 +27,8 @@
       <div class="detail-row"><span class="label">{{ t('guest_card.checkin_date') }}</span><span class="value">{{ guest.check_in_date }}{{ guest.nights >= 2 ? ` (${t('guest_card.nights', { n: guest.nights })})` : '' }}</span></div>
       <div class="detail-row"><span class="label">{{ t('guest_card.checkout_date') }}</span><span class="value">{{ guest.check_out_date }}</span></div>
       <div class="detail-row"><span class="label">{{ t('guest_card.booking_source') }}</span><span class="value">{{ guest.booking_source || t('guest_card.unknown') }}</span></div>
-      <div class="detail-row"><span class="label">{{ t('guest_card.room_type') }}</span><span class="value">{{ guest.room_type_name || t('guest_card.not_assigned') }}</span></div>
-      <div class="detail-row"><span class="label">{{ t('guest_card.breakfast') }}</span><span class="value">{{ guest.breakfast || t('guest_card.per_order') }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.room_type') }}</span><span class="value">{{ tApi(guest.room_type_name) || t('guest_card.not_assigned') }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.breakfast') }}</span><span class="value">{{ tApi(guest.breakfast) || t('guest_card.per_order') }}</span></div>
       <div class="detail-row"><span class="label">{{ t('guest_card.deposit') }}</span><span class="value price">NT$ {{ (guest.deposit_paid || 0).toLocaleString() }}</span></div>
       <div class="detail-row"><span class="label">{{ t('guest_card.total') }}</span><span class="value price">NT$ {{ (guest.room_total || 0).toLocaleString() }}</span></div>
       <div class="detail-row"><span class="label">{{ t('guest_card.balance') }}</span><span class="value price balance-due">NT$ {{ (guest.balance_due || 0).toLocaleString() }}</span></div>
@@ -51,7 +51,7 @@
         <div class="supplement-column">
           <label class="section-label">{{ t('guest_card.ai_requests') }}</label>
           <div class="ai-requests-box">
-            {{ guest.special_request_from_bot || t('guest_card.no_special') }}
+            {{ getTranslatedText(guest.special_request_from_bot) || t('guest_card.no_special') }}
           </div>
         </div>
 
@@ -72,11 +72,30 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { translateApiValue, translateText } from '../utils/translate.js';
 
 // i18n 翻譯函數
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
+// 自由文字翻譯快取（reactive）
+const freeTextTranslations = reactive({});
+
+function getTranslatedText(text) {
+  if (!text || locale.value === 'zh-TW') return text;
+  const cacheKey = `${locale.value}:${text}`;
+  if (freeTextTranslations[cacheKey]) return freeTextTranslations[cacheKey];
+  freeTextTranslations[cacheKey] = text;
+  translateText(text, locale.value === 'id' ? 'id' : 'zh-TW').then(translated => {
+    freeTextTranslations[cacheKey] = translated;
+  });
+  return freeTextTranslations[cacheKey];
+}
+
+function tApi(value) {
+  return translateApiValue(value, t);
+}
 
 // 共用房客卡片元件 (GuestCard)
 const props = defineProps({
