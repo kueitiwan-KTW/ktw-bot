@@ -1,5 +1,71 @@
 # KTW Admin Dashboard - 版本歷史
 
+## v1.5.0 (2026-02-26)
+
+### ✨ 新功能：多語系國際化（i18n）+ API 內容即時翻譯
+
+#### 1. 前端國際化（i18n）架構
+
+**檔案**: `src/main.js`, `src/App.vue`, `src/components/GuestCard.vue`
+
+- **功能**: 支援繁體中文 🇹🇼 和印尼文 🇮🇩 雙語切換
+- **實作**: 整合 `vue-i18n` 國際化框架
+- **語言切換**: 側邊欄底部語言選擇按鈕，即時切換
+- **記憶功能**: 語言偏好存入 `localStorage`，重開瀏覽器自動套用
+
+#### 2. i18n 翻譯檔案
+
+**檔案**: `src/i18n/zh-TW.json`, `src/i18n/id.json`
+
+- **涵蓋**: 所有 UI 標籤、側邊欄、面板標題、按鈕、狀態文字
+- **API 對照表**: 固定 API 值（訂單狀態、房型、早餐）的翻譯對照
+- **共 150+ 個翻譯鍵值**
+
+#### 3. API 內容即時翻譯
+
+**檔案**: `src/utils/translate.js`（新增）
+
+- **對照表翻譯**: 固定 API 值（如「新訂單」→「Pesanan Baru」）零延遲對照
+- **Google Cloud Translation API**: 自由文字（AI 需求、PMS 備註、預計抵達時間）即時翻譯
+- **快取機制**: 相同文字不重複呼叫 API，使用 `Map` 快取翻譯結果
+- **翻譯欄位**:
+  - `status_name` — 訂單狀態（對照表）
+  - `room_type_name` — 房型（對照表）
+  - `breakfast` — 早餐（對照表）
+  - `special_request_from_bot` — AI 提取需求（Google Translate）
+  - `customer_remarks` — PMS 備註（Google Translate）
+  - `arrival_time_from_bot` — 預計抵達時間（Google Translate）
+
+#### 4. GuestCard 排版優化（適配印尼文）
+
+**檔案**: `src/style.css`, `src/components/GuestCard.vue`
+
+- **上下排列**: `detail-row` 改為 `flex-direction: column`，Label 在上（小字灰色 uppercase）、Value 在下
+- **解決問題**: 印尼文標籤（如「Tanggal Check-in」）比中文更長，左右排列會擠壓截斷
+- **AI 需求區**: 行距從 1.4 調到 1.6，`word-break: break-word` 處理長翻譯文
+- **Bot 標記色**: `.from-bot` 改為與房號同色 `#00d4ff`（亮青藍）
+
+### 📝 修改的文件
+
+| 檔案 | 變更說明 |
+|------|----------|
+| `src/main.js` | 整合 vue-i18n、建立 i18n 實例 |
+| `src/App.vue` | 所有 UI 文字改用 `t()` 函數、API 翻譯整合 |
+| `src/components/GuestCard.vue` | 卡片內文字 i18n + API 翻譯 + scoped CSS 優化 |
+| `src/utils/translate.js` | **新增** — 翻譯工具模組（對照表 + Google API + 快取）|
+| `src/i18n/zh-TW.json` | **新增** — 繁體中文翻譯檔 |
+| `src/i18n/id.json` | **新增** — 印尼文翻譯檔 |
+| `src/style.css` | detail-row 上下排列、AI 需求區行距、from-bot 顏色 |
+
+### 🔧 技術細節
+
+- **vue-i18n**: `createI18n({ locale, fallbackLocale, messages })`
+- **Google Cloud Translation API**: `https://translation.googleapis.com/language/translate/v2`
+- **API Key**: 內網專用，直接嵌入前端（非公開環境）
+- **快取策略**: `cacheKey = text + targetLang`，清除時呼叫 `clearTranslationCache()`
+
+---
+
 ## v1.4.0 (2025-12-27)
 
 ### ✨ 新功能：今日入住房間提醒 + 跨電腦同步
