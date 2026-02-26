@@ -6,8 +6,8 @@ import { GridStack } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import GuestCard from "./components/GuestCard.vue";
 
-// i18n 翻譯函數
-const { t, locale } = useI18n();
+// i18n 翻譯函數（tm 用於取得陣列/物件型翻譯值）
+const { t, tm, locale } = useI18n();
 
 // 語言切換
 function switchLanguage(lang) {
@@ -65,7 +65,7 @@ const GUEST_TABS_CONFIG = [
 function getTabLabel(config) {
   if (config.labelKey) return t(config.labelKey);
 
-  const weekdays = t('guests.weekdays');
+  const weekdays = tm('guests.weekdays');
   const date = new Date();
   date.setDate(date.getDate() + config.offset);
   const month = date.getMonth() + 1;
