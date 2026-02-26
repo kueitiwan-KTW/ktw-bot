@@ -4,8 +4,8 @@
  * - Google Cloud Translation API：自由文字即時翻譯
  */
 
-// Google Cloud Translation API Key（僅內網使用）
-const GOOGLE_TRANSLATE_API_KEY = 'AIzaSyAwNn2iNJqIEhFRL2-XqKmLi7D_nLZVCtM';
+// Google Cloud Translation API Key（從環境變數讀取，不進 Git）
+const GOOGLE_TRANSLATE_API_KEY = import.meta.env.VITE_GOOGLE_TRANSLATE_KEY || '';
 const TRANSLATE_API_URL = 'https://translation.googleapis.com/language/translate/v2';
 
 // ============================================================
