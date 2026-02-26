@@ -1247,6 +1247,17 @@ body {
   font-weight: 600;
 }
 
+/* Bot 提取的值（紫色標記）*/
+.detail-row .value.from-bot {
+  color: #ce93d8;
+  font-weight: 600;
+}
+
+/* 尾款（紅色）*/
+.detail-row .value.balance-due {
+  color: #ef5350;
+}
+
 .detail-row.special-request {
   grid-column: 1 / -1;
 }
