@@ -1225,15 +1225,17 @@ body {
   text-align: left;
   font-size: 0.85rem;
   width: 100%;
-  gap: 8px;
+  gap: 6px;
   padding: 2px 0;
 }
 
 .detail-row .label {
   color: #888;
-  flex-shrink: 0;
-  min-width: 75px;
+  flex: 0 0 auto;
+  max-width: 45%;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .detail-row .value {
@@ -1241,10 +1243,21 @@ body {
   white-space: normal;
   overflow-wrap: break-word;
   word-break: break-word;
-  max-width: 200px;
   flex: 1;
+  min-width: 0;
   user-select: text;
   cursor: text;
+}
+
+/* 日期和金額不換行 */
+.detail-row .value.price,
+.detail-row .value:not(.from-bot) {
+  white-space: nowrap;
+}
+
+/* 長翻譯值允許換行 */
+.detail-row .value.from-bot {
+  white-space: normal;
 }
 
 .detail-row.special-request {
