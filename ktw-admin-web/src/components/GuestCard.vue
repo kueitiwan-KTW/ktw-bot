@@ -159,8 +159,8 @@ async function saveMemo() {
   border-top: 1px dashed rgba(255, 255, 255, 0.1);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  grid-column: 1 / -1; /* 橫跨整個父容器 */
+  gap: 14px;
+  grid-column: 1 / -1;
 }
 
 .supplement-column {
@@ -183,12 +183,14 @@ async function saveMemo() {
 }
 
 .ai-requests-box {
-  padding: 10px;
+  padding: 10px 12px;
   background: rgba(49, 130, 206, 0.1);
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
   color: #90cdf4;
   min-height: 40px;
+  word-break: break-word;
 }
 
 .staff-memo-area {

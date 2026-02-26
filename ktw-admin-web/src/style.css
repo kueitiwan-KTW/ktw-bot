@@ -1215,30 +1215,35 @@ body {
 .guest-card-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 6px 12px;
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   text-align: left;
   font-size: 0.85rem;
   width: 100%;
+  gap: 8px;
+  padding: 2px 0;
 }
 
 .detail-row .label {
   color: #888;
   flex-shrink: 0;
-  min-width: 60px;
+  min-width: 75px;
+  white-space: nowrap;
 }
 
 .detail-row .value {
   text-align: right;
   white-space: normal;
   overflow-wrap: break-word;
-  max-width: 150px;
+  word-break: break-word;
+  max-width: 200px;
+  flex: 1;
   user-select: text;
-  /* 允許選取複製 */
   cursor: text;
 }
 
@@ -2150,7 +2155,7 @@ body {
 .ai-need-text {
   font-size: 0.88rem;
   color: #e0e0e0;
-  line-height: 1.4;
+  line-height: 1.55;
   word-break: break-word;
 }
 
