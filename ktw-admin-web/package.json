@@ -14,7 +14,8 @@
     "@yeger/vue-masonry-wall": "^5.1.4",
     "gridstack": "^12.3.3",
     "muuri": "^0.9.5",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-i18n": "^11.2.8"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",

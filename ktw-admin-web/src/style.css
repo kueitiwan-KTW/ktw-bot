@@ -103,6 +103,48 @@ body {
   accent-color: #00d4ff;
 }
 
+/* 語言切換器 */
+.language-switcher {
+  padding: 15px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 15px;
+}
+
+.language-switcher h4 {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+.lang-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.lang-buttons button {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #aaa;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.lang-buttons button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.lang-buttons button.active {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(123, 47, 247, 0.2));
+  border-color: #00d4ff;
+  color: #00d4ff;
+  font-weight: 600;
+}
+
 /* GridStack 自訂樣式 */
 .grid-stack {
   background: transparent;

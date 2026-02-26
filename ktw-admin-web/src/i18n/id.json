@@ -1,0 +1,149 @@
+{
+  "nav": {
+    "dashboard": "Dasbor",
+    "sync_reply": "Balasan Sinkron",
+    "rooms": "Pemantauan Kamar",
+    "bookings": "Manajemen Pesanan",
+    "guests": "Data Tamu",
+    "pos": "POS Kasir",
+    "reports": "Pusat Laporan",
+    "settings": "Pengaturan Sistem",
+    "panel_control": "📦 Kontrol Panel"
+  },
+  "header": {
+    "title": "🏨 KTW Admin",
+    "subtitle": "Sistem Manajemen Hotel v2.0",
+    "refresh": "Perbarui",
+    "refresh_title": "Segarkan semua data",
+    "second": "dtk"
+  },
+  "dashboard": {
+    "today_checkin": "Check-in Hari Ini",
+    "today_checkout": "Check-out Hari Ini",
+    "occupancy": "Tingkat Hunian",
+    "vacant": "Kamar Kosong",
+    "rooms": "Status Kamar",
+    "sameday": "Reservasi LINE Hari Ini",
+    "guest_info": "Info Tamu (8 Hari)",
+    "ai_needs": "🤖 Ringkasan Kebutuhan AI",
+    "unit_group": "grup",
+    "unit_room": "kamar"
+  },
+  "rooms": {
+    "pending_title": "🧹 Kamar Perlu Ditangani",
+    "urgent_count": "⚠️ {count} kamar check-in hari ini",
+    "acknowledged_count": "✓ Dikonfirmasi {count} kamar",
+    "legend_dirty": "Kotor",
+    "legend_inspecting": "Perlu Inspeksi",
+    "legend_urgent": "Check-in Hari Ini (Klik konfirmasi)",
+    "tooltip_title": "🔧 Catatan Kerusakan Kamar",
+    "all_clean": "✅ Semua kamar sudah dibersihkan",
+    "click_confirm": "⚠️ Check-in hari ini! Klik konfirmasi {room}",
+    "click_view": "Klik lihat status PMS {room}"
+  },
+  "booking": {
+    "title": "📱 Reservasi LINE Hari Ini",
+    "empty": "📋 Tidak ada reservasi LINE hari ini",
+    "room_count": "{count} kamar",
+    "cancelled": "✕ Dibatalkan",
+    "checked_in": "✓ Sudah KEY",
+    "mismatch": "⚠ KEY Salah",
+    "btn_keyed": "Sudah KEY",
+    "btn_rematch": "Cocokkan Ulang",
+    "btn_cancel_all": "Batalkan Semua",
+    "btn_cancel": "Batalkan",
+    "confirm_cancel": "Yakin ingin membatalkan pesanan ini?",
+    "confirm_cancel_all": "Yakin ingin membatalkan semua {count} kamar pada pesanan ini?",
+    "cancel_success": "✅ Pesanan dibatalkan",
+    "cancel_fail": "❌ Gagal membatalkan: {error}",
+    "cancel_api_fail": "❌ Permintaan API gagal: HTTP {status}",
+    "cancel_all_done": "✅ Semua tipe kamar telah dibatalkan",
+    "fetch_fail": "Gagal mengambil pesanan sementara"
+  },
+  "guests": {
+    "title": "🏨 Info Tamu",
+    "tab_yesterday": "Kemarin",
+    "tab_today": "Hari Ini",
+    "tab_tomorrow": "Besok",
+    "no_checkin": "Tidak ada check-in {day}",
+    "weekdays": ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
+  },
+  "ai": {
+    "title": "🤖 Ringkasan Kebutuhan AI",
+    "no_needs": "✅ Tidak ada kebutuhan khusus {day}",
+    "tag_ai": "🤖 AI",
+    "tag_pms": "📋 PMS",
+    "tag_counter": "📝 Resepsionis",
+    "not_assigned": "Belum ditentukan"
+  },
+  "sync": {
+    "title": "📝 Balasan Sinkron",
+    "desc": "Setelah membalas tamu secara manual di LINE OA Manager, catat konten balasan di sini agar AI dapat melihat konteks lengkap pada percakapan berikutnya.",
+    "refresh": "🔄 Segarkan",
+    "today_checkin_label": "🏨 Tamu Check-in Hari Ini",
+    "today_no_match": "Tidak ada tamu LINE yang cocok hari ini",
+    "select_label": "Pilih tamu (percakapan terbaru)",
+    "no_records": "Belum ada catatan tamu",
+    "load_list": "Muat daftar tamu",
+    "reply_to": "Balas ke:",
+    "recent_chat": "💬 Percakapan Terbaru",
+    "textarea_placeholder": "Masukkan konten balasan Anda di LINE OA Manager...",
+    "sending": "Mengirim...",
+    "send_record": "📨 Kirim dan Catat",
+    "send_success": "✅ Terkirim dan dicatat, AI dapat melihatnya nanti",
+    "send_fail": "❌ Gagal mengirim",
+    "history_title": "📋 Balasan yang Dicatat",
+    "history_empty": "Belum ada catatan balasan manual",
+    "select_hint": "👈 Pilih tamu dari sisi kiri untuk membalas"
+  },
+  "guest_card": {
+    "no_room": "Belum ditentukan",
+    "phone": "No. Telepon",
+    "checkin_date": "Tanggal Check-in",
+    "checkout_date": "Tanggal Check-out",
+    "booking_source": "Sumber Reservasi",
+    "room_type": "Tipe Kamar",
+    "breakfast": "Sarapan",
+    "deposit": "Deposit Dibayar",
+    "total": "Total Harga Kamar",
+    "balance": "Sisa Pembayaran",
+    "arrival_time": "Perkiraan Tiba",
+    "line_name": "Nama LINE",
+    "nights": "{n} malam",
+    "unknown": "Tidak diketahui",
+    "not_assigned": "Belum ditentukan",
+    "per_order": "Sesuai pesanan",
+    "not_provided": "Tidak tersedia",
+    "pending_ai": "Menunggu AI",
+    "ai_requests": "🤖 Kebutuhan dari A.I.",
+    "no_special": "Tidak ada kebutuhan khusus",
+    "counter_memo": "📝 Catatan Resepsionis (Sinkron)",
+    "memo_placeholder": "Klik untuk catatan resepsionis... (simpan otomatis)",
+    "saving": "Menyimpan...",
+    "saved": "✅ Tersimpan",
+    "save_fail": "❌ Gagal menyimpan",
+    "network_error": "❌ Kesalahan jaringan"
+  },
+  "time": {
+    "just_now": "Baru saja",
+    "minutes_ago": "{n} menit lalu",
+    "hours_ago": "{n} jam lalu",
+    "days_ago": "{n} hari lalu"
+  },
+  "common": {
+    "loading": "Memuat...",
+    "developing": "📦 Fitur {page} sedang dikembangkan...",
+    "pms_fail": "PMS API gagal merespons"
+  },
+  "services": {
+    "ai_assistant": "Asisten AI",
+    "pms_api": "PMS API",
+    "gmail": "Gmail",
+    "ngrok": "Ngrok"
+  },
+  "language": {
+    "label": "🌐 Bahasa",
+    "zh_tw": "🇹🇼 繁中",
+    "id": "🇮🇩 Indonesia"
+  }
+}

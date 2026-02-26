@@ -1,0 +1,149 @@
+{
+  "nav": {
+    "dashboard": "儀表板",
+    "sync_reply": "同步回覆",
+    "rooms": "房況監控",
+    "bookings": "訂單管理",
+    "guests": "旅客資料",
+    "pos": "POS 收銀",
+    "reports": "報表中心",
+    "settings": "系統設定",
+    "panel_control": "📦 面板控制"
+  },
+  "header": {
+    "title": "🏨 KTW Admin",
+    "subtitle": "飯店管理系統 v2.0",
+    "refresh": "更新",
+    "refresh_title": "重新整理全部資料",
+    "second": "秒"
+  },
+  "dashboard": {
+    "today_checkin": "今日入住",
+    "today_checkout": "今日退房",
+    "occupancy": "住房率",
+    "vacant": "空房數",
+    "rooms": "即時房況",
+    "sameday": "LINE 當日預訂",
+    "guest_info": "入住資訊 (8日預覽)",
+    "ai_needs": "🤖 AI 需求速覽",
+    "unit_group": "組",
+    "unit_room": "間"
+  },
+  "rooms": {
+    "pending_title": "🧹 待處理房間",
+    "urgent_count": "⚠️ {count} 間今日入住",
+    "acknowledged_count": "✓ 已確認 {count} 間",
+    "legend_dirty": "髒房",
+    "legend_inspecting": "待檢查",
+    "legend_urgent": "今日入住 (點擊確認)",
+    "tooltip_title": "🔧 房間瑕疵紀錄",
+    "all_clean": "✅ 所有房間皆已清掃完成",
+    "click_confirm": "⚠️ 今日入住！點擊確認 {room}",
+    "click_view": "點擊查看 {room} 的 PMS 狀態"
+  },
+  "booking": {
+    "title": "📱 LINE 當日預訂",
+    "empty": "📋 目前無 LINE 當日預訂",
+    "room_count": "{count} 間",
+    "cancelled": "✕ 已取消",
+    "checked_in": "✓ 已 KEY",
+    "mismatch": "⚠ KEY 錯",
+    "btn_keyed": "已 KEY",
+    "btn_rematch": "重新匹配",
+    "btn_cancel_all": "全部取消",
+    "btn_cancel": "取消",
+    "confirm_cancel": "確定要取消此訂單嗎？",
+    "confirm_cancel_all": "確定要取消此訂單的所有 {count} 間房嗎？",
+    "cancel_success": "✅ 訂單已取消",
+    "cancel_fail": "❌ 取消失敗：{error}",
+    "cancel_api_fail": "❌ API 請求失敗：HTTP {status}",
+    "cancel_all_done": "✅ 已取消所有房型",
+    "fetch_fail": "取得暫存訂單失敗"
+  },
+  "guests": {
+    "title": "🏨 入住資訊",
+    "tab_yesterday": "昨日",
+    "tab_today": "今日",
+    "tab_tomorrow": "明日",
+    "no_checkin": "{day}無入住",
+    "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+  },
+  "ai": {
+    "title": "🤖 AI 需求速覽",
+    "no_needs": "✅ {day}無特殊需求",
+    "tag_ai": "🤖 AI",
+    "tag_pms": "📋 PMS",
+    "tag_counter": "📝 櫃檯",
+    "not_assigned": "未排房"
+  },
+  "sync": {
+    "title": "📝 同步回覆",
+    "desc": "在 LINE OA Manager 手動回覆客人後，在此記錄回覆內容，讓 AI 下次對話能看到完整脈絡。",
+    "refresh": "🔄 重新整理",
+    "today_checkin_label": "🏨 當日入住客人",
+    "today_no_match": "今日無可匹配的 LINE 客人",
+    "select_label": "選擇客人（最新對話優先）",
+    "no_records": "尚無客人記錄",
+    "load_list": "載入客人列表",
+    "reply_to": "回覆給：",
+    "recent_chat": "💬 最近對話",
+    "textarea_placeholder": "輸入你在 LINE OA Manager 回覆客人的內容...",
+    "sending": "發送中...",
+    "send_record": "📨 發送並記錄",
+    "send_success": "✅ 已發送給客人並記錄，AI 下次對話能看到",
+    "send_fail": "❌ 發送失敗",
+    "history_title": "📋 已記錄的回覆",
+    "history_empty": "尚無手動回覆紀錄",
+    "select_hint": "👈 請先從左側選擇要同步回覆的客人"
+  },
+  "guest_card": {
+    "no_room": "尚未排房",
+    "phone": "聯絡電話",
+    "checkin_date": "入住日期",
+    "checkout_date": "退房日期",
+    "booking_source": "訂房來源",
+    "room_type": "房型",
+    "breakfast": "早餐",
+    "deposit": "已付訂金",
+    "total": "房價總額",
+    "balance": "應收尾款",
+    "arrival_time": "預計抵達",
+    "line_name": "LINE 姓名",
+    "nights": "{n}晚",
+    "unknown": "未知",
+    "not_assigned": "尚未分配",
+    "per_order": "依訂單",
+    "not_provided": "未提供",
+    "pending_ai": "待 AI 處理",
+    "ai_requests": "🤖 A.I. 提取需求",
+    "no_special": "尚無特殊需求",
+    "counter_memo": "📝 櫃檯備註 (程序同步)",
+    "memo_placeholder": "點擊輸入櫃檯備註... (自動儲存)",
+    "saving": "正在儲存...",
+    "saved": "✅ 已儲存",
+    "save_fail": "❌ 儲存失敗",
+    "network_error": "❌ 網路錯誤"
+  },
+  "time": {
+    "just_now": "剛剛",
+    "minutes_ago": "{n}分鐘前",
+    "hours_ago": "{n}小時前",
+    "days_ago": "{n}天前"
+  },
+  "common": {
+    "loading": "載入中...",
+    "developing": "📦 {page} 功能開發中...",
+    "pms_fail": "PMS API 回傳失敗"
+  },
+  "services": {
+    "ai_assistant": "AI 助手",
+    "pms_api": "PMS API",
+    "gmail": "Gmail",
+    "ngrok": "Ngrok"
+  },
+  "language": {
+    "label": "🌐 語言",
+    "zh_tw": "🇹🇼 繁中",
+    "id": "🇮🇩 Indonesia"
+  }
+}

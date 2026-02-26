@@ -1,8 +1,18 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, reactive, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { setLocale } from "./i18n/index.js";
 import { GridStack } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import GuestCard from "./components/GuestCard.vue";
+
+// i18n 翻譯函數
+const { t, locale } = useI18n();
+
+// 語言切換
+function switchLanguage(lang) {
+  setLocale(lang);
+}
 
 // API 基礎 URL（動態取得主機名）
 const API_BASE = `http://${window.location.hostname}:3000`;
@@ -11,112 +21,56 @@ const API_BASE = `http://${window.location.hostname}:3000`;
 let grid = null;
 
 // 面板配置（可拖曳、可縮放、可隱藏、可收折）
+// Widget 標題的 i18n 對照表
+const widgetTitleKeys = {
+  checkin: 'dashboard.today_checkin',
+  checkout: 'dashboard.today_checkout',
+  occupancy: 'dashboard.occupancy',
+  vacant: 'dashboard.vacant',
+  rooms: 'dashboard.rooms',
+  sameday: 'dashboard.sameday',
+  guests: 'dashboard.guest_info',
+  'ai-needs': 'dashboard.ai_needs',
+};
+
 const widgets = ref([
-  {
-    id: "checkin",
-    title: "今日入住",
-    x: 0,
-    y: 0,
-    w: 25,
-    h: 2,
-    visible: true,
-    collapsed: false,
-  },
-  {
-    id: "checkout",
-    title: "今日退房",
-    x: 25,
-    y: 0,
-    w: 25,
-    h: 2,
-    visible: true,
-    collapsed: false,
-  },
-  {
-    id: "occupancy",
-    title: "住房率",
-    x: 50,
-    y: 0,
-    w: 25,
-    h: 2,
-    visible: true,
-    collapsed: false,
-  },
-  {
-    id: "vacant",
-    title: "空房數",
-    x: 75,
-    y: 0,
-    w: 25,
-    h: 2,
-    visible: true,
-    collapsed: false,
-  },
-  {
-    id: "rooms",
-    title: "即時房況",
-    x: 0,
-    y: 2,
-    w: 100,
-    h: 5,
-    visible: true,
-    collapsed: false,
-  },
-  {
-    id: "sameday",
-    title: "LINE 當日預訂",
-    x: 0,
-    y: 6,
-    w: 100,
-    h: 4,
-    visible: true,
-    collapsed: false,
-  },
-  {
-    id: "guests",
-    title: "入住資訊 (8日預覽)",
-    x: 0,
-    y: 10,
-    w: 100,
-    h: 4,
-    visible: true,
-    collapsed: false,
-  },
-  {
-    id: "ai-needs",
-    title: "🤖 AI 需求速覽",
-    x: 0,
-    y: 14,
-    w: 100,
-    h: 4,
-    visible: true,
-    collapsed: false,
-  },
+  { id: "checkin", x: 0, y: 0, w: 25, h: 2, visible: true, collapsed: false },
+  { id: "checkout", x: 25, y: 0, w: 25, h: 2, visible: true, collapsed: false },
+  { id: "occupancy", x: 50, y: 0, w: 25, h: 2, visible: true, collapsed: false },
+  { id: "vacant", x: 75, y: 0, w: 25, h: 2, visible: true, collapsed: false },
+  { id: "rooms", x: 0, y: 2, w: 100, h: 5, visible: true, collapsed: false },
+  { id: "sameday", x: 0, y: 6, w: 100, h: 4, visible: true, collapsed: false },
+  { id: "guests", x: 0, y: 10, w: 100, h: 4, visible: true, collapsed: false },
+  { id: "ai-needs", x: 0, y: 14, w: 100, h: 4, visible: true, collapsed: false },
 ]);
+
+// 取得 widget 翻譯標題
+function getWidgetTitle(id) {
+  return t(widgetTitleKeys[id] || id);
+}
 
 // 分頁配置：昨、今、明 + 未來 5 天
 const GUEST_TABS_CONFIG = [
-  { offset: -1, label: "昨日" },
-  { offset: 0, label: "今日" },
-  { offset: 1, label: "明日" },
-  { offset: 2, label: null }, // 動態日期 1
-  { offset: 3, label: null }, // 動態日期 2
-  { offset: 4, label: null }, // 動態日期 3
-  { offset: 5, label: null }, // 動態日期 4
-  { offset: 6, label: null }, // 動態日期 5
+  { offset: -1, labelKey: "guests.tab_yesterday" },
+  { offset: 0, labelKey: "guests.tab_today" },
+  { offset: 1, labelKey: "guests.tab_tomorrow" },
+  { offset: 2, labelKey: null },
+  { offset: 3, labelKey: null },
+  { offset: 4, labelKey: null },
+  { offset: 5, labelKey: null },
+  { offset: 6, labelKey: null },
 ];
 
-// 格式化 Tab 標籤文字（含國字星期幾）
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
-
+// 格式化 Tab 標籤文字（含在地化星期幾）
 function getTabLabel(config) {
-  if (config.label) return config.label;
+  if (config.labelKey) return t(config.labelKey);
 
+  const weekdays = t('guests.weekdays');
   const date = new Date();
   date.setDate(date.getDate() + config.offset);
   const month = date.getMonth() + 1;
   const day = date.getDate();
-  const weekday = WEEKDAYS[date.getDay()];
+  const weekday = weekdays[date.getDay()];
   return `${month}/${day} ${weekday}`;
 }
 
@@ -162,7 +116,7 @@ async function fetchPMSDashboard() {
       if (result.success) {
         stats.value = result.data;
       } else {
-        pmsError.value = result.error || "PMS API 回傳失敗";
+        pmsError.value = result.error || t('common.pms_fail');
       }
     } else {
       pmsError.value = `HTTP ${res.status}`;
@@ -333,12 +287,12 @@ function formatLastActivity(isoString) {
   const now = new Date();
   const diffMs = now - date;
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return '剛剛';
-  if (diffMin < 60) return `${diffMin}分鐘前`;
+  if (diffMin < 1) return t('time.just_now');
+  if (diffMin < 60) return t('time.minutes_ago', { n: diffMin });
   const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}小時前`;
+  if (diffHour < 24) return t('time.hours_ago', { n: diffHour });
   const diffDay = Math.floor(diffHour / 24);
-  return `${diffDay}天前`;
+  return t('time.days_ago', { n: diffDay });
 }
 
 // 取得選中客人的顯示名
@@ -491,7 +445,7 @@ async function fetchSameDayBookings() {
       if (result.success) {
         sameDayBookings.value = result.data?.bookings || [];
       } else {
-        sameDayError.value = result.error || "取得暫存訂單失敗";
+        sameDayError.value = result.error || t('booking.fetch_fail');
       }
     } else {
       sameDayError.value = `HTTP ${res.status}`;
@@ -531,7 +485,7 @@ async function markAsKeyed(orderId) {
 
 // 取消暫存訂單（標記而非刪除）
 async function cancelBooking(orderId) {
-  if (!confirm("確定要取消此訂單嗎？")) return;
+  if (!confirm(t('booking.confirm_cancel'))) return;
 
   try {
     const res = await fetch(
@@ -544,18 +498,18 @@ async function cancelBooking(orderId) {
     if (res.ok) {
       const result = await res.json();
       if (result.success) {
-        alert("✅ 訂單已取消");
+        alert(t('booking.cancel_success'));
         // 刷新列表
         await fetchSameDayBookings();
       } else {
-        alert("❌ 取消失敗：" + (result.error?.message || "未知錯誤"));
+        alert(t('booking.cancel_fail', { error: result.error?.message || '未知錯誤' }));
       }
     } else {
-      alert("❌ API 請求失敗：HTTP " + res.status);
+      alert(t('booking.cancel_api_fail', { status: res.status }));
     }
   } catch (error) {
     console.error("取消訂單失敗:", error);
-    alert("❌ 取消失敗：" + error.message);
+    alert(t('booking.cancel_fail', { error: error.message }));
   }
 }
 
@@ -585,7 +539,7 @@ async function cancelAllBookings(group) {
   );
   if (pendingItems.length === 0) return;
 
-  if (!confirm(`確定要取消此訂單的所有 ${pendingItems.length} 間房嗎？`))
+  if (!confirm(t('booking.confirm_cancel_all', { count: pendingItems.length })))
     return;
 
   for (const item of pendingItems) {
@@ -603,7 +557,7 @@ async function cancelAllBookings(group) {
       console.error("批次取消失敗:", error);
     }
   }
-  alert("✅ 已取消所有房型");
+  alert(t('booking.cancel_all_done'));
   await fetchSameDayBookings();
 }
 
@@ -633,10 +587,10 @@ async function manualRefresh() {
 
 // 服務狀態監控
 const services = ref([
-  { id: "bot", name: "AI 助手", icon: "🤖", status: "checking", port: 5001 },
-  { id: "pms", name: "PMS API", icon: "🔌", status: "checking", port: 3000 },
-  { id: "gmail", name: "Gmail", icon: "📧", status: "checking", port: null },
-  { id: "ngrok", name: "Ngrok", icon: "🌐", status: "checking", port: null },
+  { id: "bot", nameKey: "services.ai_assistant", icon: "🤖", status: "checking", port: 5001 },
+  { id: "pms", nameKey: "services.pms_api", icon: "🔌", status: "checking", port: 3000 },
+  { id: "gmail", nameKey: "services.gmail", icon: "📧", status: "checking", port: null },
+  { id: "ngrok", nameKey: "services.ngrok", icon: "🌐", status: "checking", port: null },
 ]);
 
 // 檢查服務狀態 (透過 Node.js Core API)
@@ -701,10 +655,10 @@ function formatTime(timestamp) {
   const now = new Date();
   const diff = now - date;
 
-  if (diff < 60000) return "剛剛";
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分鐘前`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小時前`;
-  return date.toLocaleString("zh-TW");
+  if (diff < 60000) return t('time.just_now');
+  if (diff < 3600000) return t('time.minutes_ago', { n: Math.floor(diff / 60000) });
+  if (diff < 86400000) return t('time.hours_ago', { n: Math.floor(diff / 3600000) });
+  return date.toLocaleString(locale.value === 'id' ? 'id-ID' : 'zh-TW');
 }
 
 // 切換面板顯示/隱藏
@@ -1093,14 +1047,14 @@ function switchMenu(menuId) {
 }
 
 const menuItems = [
-  { id: "dashboard", icon: "📊", label: "儀表板" },
-  { id: "sync-reply", icon: "📝", label: "同步回覆" },
-  { id: "rooms", icon: "🏨", label: "房況監控" },
-  { id: "bookings", icon: "📅", label: "訂單管理" },
-  { id: "guests", icon: "👥", label: "旅客資料" },
-  { id: "pos", icon: "💰", label: "POS 收銀" },
-  { id: "reports", icon: "📈", label: "報表中心" },
-  { id: "settings", icon: "⚙️", label: "系統設定" },
+  { id: "dashboard", icon: "📊", labelKey: "nav.dashboard" },
+  { id: "sync-reply", icon: "📝", labelKey: "nav.sync_reply" },
+  { id: "rooms", icon: "🏨", labelKey: "nav.rooms" },
+  { id: "bookings", icon: "📅", labelKey: "nav.bookings" },
+  { id: "guests", icon: "👥", labelKey: "nav.guests" },
+  { id: "pos", icon: "💰", labelKey: "nav.pos" },
+  { id: "reports", icon: "📈", labelKey: "nav.reports" },
+  { id: "settings", icon: "⚙️", labelKey: "nav.settings" },
 ];
 
 // 狀態圖示對照
@@ -1118,8 +1072,8 @@ const statusIcons = {
     <!-- 側邊欄 -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h1>🏨 KTW Admin</h1>
-        <p>飯店管理系統 v2.0</p>
+        <h1>{{ $t('header.title') }}</h1>
+        <p>{{ $t('header.subtitle') }}</p>
       </div>
       <ul class="nav-menu">
         <li
@@ -1130,40 +1084,49 @@ const statusIcons = {
           @click="switchMenu(item.id)"
         >
           <span class="nav-icon">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
+          <span>{{ $t(item.labelKey) }}</span>
         </li>
       </ul>
 
       <!-- 面板控制 -->
       <div v-if="activeMenu === 'dashboard'" class="widget-controls">
-        <h4>📦 面板控制</h4>
+        <h4>{{ $t('nav.panel_control') }}</h4>
         <label v-for="w in widgets" :key="w.id" class="widget-toggle">
           <input
             type="checkbox"
             v-model="w.visible"
             @change="toggleWidget(w.id)"
           />
-          <span>{{ w.title }}</span>
+          <span>{{ getWidgetTitle(w.id) }}</span>
         </label>
+      </div>
+
+      <!-- 語言切換 -->
+      <div class="language-switcher">
+        <h4>{{ $t('language.label') }}</h4>
+        <div class="lang-buttons">
+          <button :class="{ active: locale === 'zh-TW' }" @click="switchLanguage('zh-TW')">{{ $t('language.zh_tw') }}</button>
+          <button :class="{ active: locale === 'id' }" @click="switchLanguage('id')">{{ $t('language.id') }}</button>
+        </div>
       </div>
     </aside>
 
     <!-- 主內容區 -->
     <main class="main-content">
       <header class="header">
-        <h2>{{ menuItems.find((m) => m.id === activeMenu)?.label }}</h2>
+        <h2>{{ $t(menuItems.find((m) => m.id === activeMenu)?.labelKey) }}</h2>
         <div class="header-right">
           <div v-if="activeMenu === 'dashboard'" class="refresh-group">
             <div class="countdown-timer" :class="{ warning: countdown <= 5 }">
               <span class="countdown-value">{{ countdown }}</span>
-              <span class="countdown-unit">秒</span>
+              <span class="countdown-unit">{{ $t('header.second') }}</span>
             </div>
             <button
               @click="manualRefresh"
               class="refresh-btn"
-              title="重新整理全部資料"
+              :title="$t('header.refresh_title')"
             >
-              更新
+              {{ $t('header.refresh') }}
             </button>
           </div>
           <div class="header-services">
@@ -1172,7 +1135,7 @@ const statusIcons = {
               :key="service.id"
               class="header-service-item"
             >
-              <span class="service-name-small">{{ service.name }}</span>
+              <span class="service-name-small">{{ $t(service.nameKey) }}</span>
               <span class="service-status-dot" :class="service.status"></span>
             </div>
           </div>
@@ -1195,10 +1158,10 @@ const statusIcons = {
         >
           <div class="grid-stack-item-content stat-card">
             <div class="widget-handle"></div>
-            <h3>今日入住</h3>
+            <h3>{{ $t('dashboard.today_checkin') }}</h3>
             <div class="stat-row">
               <span class="stat-value">{{ stats.todayCheckin }}</span>
-              <span class="stat-unit">組</span>
+              <span class="stat-unit">{{ $t('dashboard.unit_group') }}</span>
             </div>
           </div>
         </div>
@@ -1217,10 +1180,10 @@ const statusIcons = {
         >
           <div class="grid-stack-item-content stat-card">
             <div class="widget-handle"></div>
-            <h3>今日退房</h3>
+            <h3>{{ $t('dashboard.today_checkout') }}</h3>
             <div class="stat-row">
               <span class="stat-value">{{ stats.todayCheckout }}</span>
-              <span class="stat-unit">組</span>
+              <span class="stat-unit">{{ $t('dashboard.unit_group') }}</span>
             </div>
           </div>
         </div>
@@ -1239,7 +1202,7 @@ const statusIcons = {
         >
           <div class="grid-stack-item-content stat-card">
             <div class="widget-handle"></div>
-            <h3>住房率</h3>
+            <h3>{{ $t('dashboard.occupancy') }}</h3>
             <div class="stat-row">
               <span class="stat-value">{{
                 stats.totalRooms > 0
@@ -1265,12 +1228,12 @@ const statusIcons = {
         >
           <div class="grid-stack-item-content stat-card">
             <div class="widget-handle"></div>
-            <h3>空房數</h3>
+            <h3>{{ $t('dashboard.vacant') }}</h3>
             <div class="stat-row">
               <span class="stat-value">{{
                 stats.totalRooms - stats.occupiedRooms
               }}</span>
-              <span class="stat-unit">間</span>
+              <span class="stat-unit">{{ $t('dashboard.unit_room') }}</span>
             </div>
           </div>
         </div>
@@ -1290,29 +1253,29 @@ const statusIcons = {
           <div class="grid-stack-item-content room-status-panel">
             <div class="widget-handle"></div>
             <h3>
-              🧹 待處理房間
+              {{ $t('rooms.pending_title') }}
               <span class="room-count">({{ dirtyRooms.length }})</span>
               <span v-if="urgentRoomCount > 0" class="urgent-count">
-                ⚠️ {{ urgentRoomCount }} 間今日入住
+                {{ $t('rooms.urgent_count', { count: urgentRoomCount }) }}
               </span>
               <span v-if="acknowledgedCount > 0" class="acknowledged-count" @click="clearAcknowledgedRooms" title="點擊恢復顯示">
-                ✓ 已確認 {{ acknowledgedCount }} 間
+                {{ $t('rooms.acknowledged_count', { count: acknowledgedCount }) }}
               </span>
               <div class="status-legend">
                 <span class="legend-item"
-                  ><span class="dot dirty"></span>髒房</span
+                  ><span class="dot dirty"></span>{{ $t('rooms.legend_dirty') }}</span
                 >
                 <span class="legend-item"
-                  ><span class="dot inspecting"></span>待檢查</span
+                  ><span class="dot inspecting"></span>{{ $t('rooms.legend_inspecting') }}</span
                 >
                 <span class="legend-item"
-                  ><span class="dot urgent"></span>今日入住 (點擊確認)</span
+                  ><span class="dot urgent"></span>{{ $t('rooms.legend_urgent') }}</span
                 >
               </div>
             </h3>
-            <div v-if="roomsLoading" class="loading-text">載入中...</div>
+            <div v-if="roomsLoading" class="loading-text">{{ $t('common.loading') }}</div>
             <div v-else-if="dirtyRooms.length === 0" class="empty-text">
-              ✅ 所有房間皆已清掃完成
+              {{ $t('rooms.all_clean') }}
             </div>
             <div v-else class="floor-grid" @mouseleave="hideTooltip">
               <!-- 按樓層分組顯示 -->
@@ -1329,7 +1292,7 @@ const statusIcons = {
                     :key="room.number"
                     class="room-card clickable"
                     :class="[room.status, { urgent: room.shouldBlink }]"
-                    :title="room.shouldBlink ? `⚠️ 今日入住！點擊確認 ${room.number}` : `點擊查看 ${room.number} 的 PMS 狀態`"
+                    :title="room.shouldBlink ? $t('rooms.click_confirm', { room: room.number }) : $t('rooms.click_view', { room: room.number })"
                     @click="handleRoomClick(room)"
                     @mouseenter="showTooltip(room, $event)"
                     @mousemove="moveTooltip"
@@ -1349,7 +1312,7 @@ const statusIcons = {
                 left: tooltipPos.x + 15 + 'px',
               }"
             >
-              <span class="tooltip-title">🔧 房間瑕疵紀錄</span>
+              <span class="tooltip-title">{{ $t('rooms.tooltip_title') }}</span>
               <div class="tooltip-content">{{ hoveredRoom.oos_reason }}</div>
             </div>
           </div>
@@ -1372,7 +1335,7 @@ const statusIcons = {
             <div class="panel-header">
               <div class="widget-handle"></div>
               <h3>
-                📱 LINE 當日預訂
+                {{ $t('booking.title') }}
                 <span class="panel-count">({{ sameDayBookings.length }})</span>
               </h3>
               <button class="collapse-btn" @click="toggleCollapse(5)">
@@ -1380,12 +1343,12 @@ const statusIcons = {
               </button>
             </div>
             <div v-show="!widgets[5].collapsed" class="panel-body">
-              <div v-if="sameDayLoading" class="loading-text">載入中...</div>
+              <div v-if="sameDayLoading" class="loading-text">{{ $t('common.loading') }}</div>
               <div v-else-if="sameDayError" class="error-text">
                 {{ sameDayError }}
               </div>
               <div v-else-if="groupedBookings.length === 0" class="empty-text">
-                📋 目前無 LINE 當日預訂
+                {{ $t('booking.empty') }}
               </div>
               <div v-else class="same-day-table-wrapper">
                 <!-- 使用收折顯示：大訂單 > 小訂單 -->
@@ -1418,23 +1381,23 @@ const statusIcons = {
                       {{ group.arrival_time || "-" }}
                     </span>
                     <span class="room-count-badge"
-                      >{{ group.items.length }} 間</span
+                      >{{ $t('booking.room_count', { count: group.items.length }) }}</span
                     >
                     <!-- 大訂單狀態顯示 -->
                     <span
                       v-if="group.groupStatus === 'cancelled'"
                       class="group-status-cancelled"
-                      >✕ 已取消</span
+                      >{{ $t('booking.cancelled') }}</span
                     >
                     <span
                       v-else-if="group.groupStatus === 'checked_in'"
                       class="group-status-done"
-                      >✓ 已 KEY</span
+                      >{{ $t('booking.checked_in') }}</span
                     >
                     <span
                       v-else-if="group.groupStatus === 'mismatch'"
                       class="group-status-mismatch"
-                      >⚠ KEY 錯</span
+                      >{{ $t('booking.mismatch') }}</span
                     >
                     <span
                       class="special-requests"
@@ -1449,7 +1412,7 @@ const statusIcons = {
                         @click="markAllAsKeyed(group)"
                         v-if="group.groupStatus === 'pending'"
                       >
-                        已 KEY
+                        {{ $t('booking.btn_keyed') }}
                       </button>
                       <!-- KEY 錯狀態：重新匹配按鈕 -->
                       <button
@@ -1457,7 +1420,7 @@ const statusIcons = {
                         @click="markAllAsKeyed(group)"
                         v-if="group.groupStatus === 'mismatch'"
                       >
-                        重新匹配
+                        {{ $t('booking.btn_rematch') }}
                       </button>
                       <button
                         class="cancel-btn-sm"
@@ -1467,7 +1430,7 @@ const statusIcons = {
                           group.groupStatus === 'mismatch'
                         "
                       >
-                        全部取消
+                        {{ $t('booking.btn_cancel_all') }}
                       </button>
                     </div>
                   </div>
@@ -1498,12 +1461,12 @@ const statusIcons = {
                         <span
                           v-if="item.status === 'checked_in'"
                           class="done-text"
-                          >✓ 已 KEY</span
+                          >{{ $t('booking.checked_in') }}</span
                         >
                         <span
                           v-else-if="item.status === 'cancelled'"
                           class="cancelled-text"
-                          >✕ 已取消</span
+                          >{{ $t('booking.cancelled') }}</span
                         >
                         <!-- pending 狀態不顯示文字 -->
                       </span>
@@ -1520,7 +1483,7 @@ const statusIcons = {
                             cancelBooking(item.item_id || item.order_id)
                           "
                         >
-                          取消
+                          {{ $t('booking.btn_cancel') }}
                         </button>
                       </span>
                     </div>
@@ -1547,7 +1510,7 @@ const statusIcons = {
           <div class="grid-stack-item-content guest-cards-panel">
             <div class="panel-header">
               <div class="widget-handle"></div>
-              <h3>🏨 入住資訊</h3>
+              <h3>{{ $t('guests.title') }}</h3>
               <div class="guest-tabs">
                 <button
                   v-for="cfg in GUEST_TABS_CONFIG"
@@ -1578,7 +1541,7 @@ const statusIcons = {
                     v-if="guestTabs[cfg.offset.toString()]?.loading"
                     class="loading-text"
                   >
-                    載入中...
+                    {{ $t('common.loading') }}
                   </div>
                   <div
                     v-else-if="
@@ -1586,7 +1549,7 @@ const statusIcons = {
                     "
                     class="empty-text"
                   >
-                    {{ getTabLabel(cfg) }}無入住
+                    {{ $t('guests.no_checkin', { day: getTabLabel(cfg) }) }}
                   </div>
                   <div v-else class="guest-cards-list">
                     <GuestCard
@@ -1623,7 +1586,7 @@ const statusIcons = {
           <div class="grid-stack-item-content ai-needs-panel">
             <div class="panel-header">
               <div class="widget-handle"></div>
-              <h3>🤖 AI 需求速覽</h3>
+              <h3>{{ $t('ai.title') }}</h3>
               <div class="guest-tabs">
                 <button
                   v-for="cfg in GUEST_TABS_CONFIG"
@@ -1650,13 +1613,13 @@ const statusIcons = {
                     v-if="guestTabs[cfg.offset.toString()]?.loading"
                     class="loading-text"
                   >
-                    載入中...
+                    {{ $t('common.loading') }}
                   </div>
                   <div
                     v-else-if="getAiNeedsGuests(cfg.offset).length === 0"
                     class="empty-text"
                   >
-                    ✅ {{ getTabLabel(cfg) }}無特殊需求
+                    ✅ {{ $t('ai.no_needs', { day: getTabLabel(cfg) }) }}
                   </div>
                   <div v-else class="ai-needs-list">
                     <div
@@ -1665,22 +1628,22 @@ const statusIcons = {
                       class="ai-needs-item"
                     >
                       <div class="ai-needs-room">
-                        <span class="ai-room-tag">{{ g.room_numbers?.join(', ') || '未排房' }}</span>
+                        <span class="ai-room-tag">{{ g.room_numbers?.join(', ') || $t('ai.not_assigned') }}</span>
                         <span class="ai-guest-name">{{ g.guest_name }}</span>
                         <span v-if="g.line_name" class="ai-line-name">({{ g.line_name }})</span>
                         <span class="ai-status-badge" :class="'status-' + g.status_code">{{ g.status_name }}</span>
                       </div>
                       <div class="ai-needs-details">
                         <div v-if="g.special_request_from_bot" class="ai-need-row">
-                          <span class="ai-need-tag bot">🤖 AI</span>
+                          <span class="ai-need-tag bot">{{ $t('ai.tag_ai') }}</span>
                           <span class="ai-need-text">{{ g.special_request_from_bot }}</span>
                         </div>
                         <div v-if="g.customer_remarks" class="ai-need-row">
-                          <span class="ai-need-tag pms">📋 PMS</span>
+                          <span class="ai-need-tag pms">{{ $t('ai.tag_pms') }}</span>
                           <span class="ai-need-text">{{ g.customer_remarks }}</span>
                         </div>
                         <div v-if="g.staff_memo" class="ai-need-row">
-                          <span class="ai-need-tag memo">📝 櫃檯</span>
+                          <span class="ai-need-tag memo">{{ $t('ai.tag_counter') }}</span>
                           <span class="ai-need-text">{{ g.staff_memo }}</span>
                         </div>
                       </div>
@@ -1697,17 +1660,17 @@ const statusIcons = {
       <div v-else-if="activeMenu === 'sync-reply'" class="sync-reply-page">
         <div class="sync-reply-panel">
           <div class="sync-page-header">
-            <h3>📝 同步回覆</h3>
-            <p class="sync-page-desc">在 LINE OA Manager 手動回覆客人後，在此記錄回覆內容，讓 AI 下次對話能看到完整脈絡。</p>
-            <button class="sync-refresh-btn" @click="fetchChatUsers">🔄 重新整理</button>
+            <h3>{{ $t('sync.title') }}</h3>
+            <p class="sync-page-desc">{{ $t('sync.desc') }}</p>
+            <button class="sync-refresh-btn" @click="fetchChatUsers">{{ $t('sync.refresh') }}</button>
           </div>
           <div class="sync-reply-container">
             <!-- 客人選擇列表 -->
             <div class="sync-reply-users">
               <!-- 當日入住客人區塊 -->
-              <div class="sync-reply-label today-checkin-label">🏨 當日入住客人</div>
-              <div v-if="todayCheckinLoading" class="empty-text">載入中...</div>
-              <div v-else-if="todayCheckinUsers.length === 0" class="empty-text today-checkin-empty">今日無可匹配的 LINE 客人</div>
+              <div class="sync-reply-label today-checkin-label">{{ $t('sync.today_checkin_label') }}</div>
+              <div v-if="todayCheckinLoading" class="empty-text">{{ $t('common.loading') }}</div>
+              <div v-else-if="todayCheckinUsers.length === 0" class="empty-text today-checkin-empty">{{ $t('sync.today_no_match') }}</div>
               <div v-else class="sync-user-list today-checkin-list">
                 <div
                   v-for="u in todayCheckinUsers"
@@ -1722,11 +1685,11 @@ const statusIcons = {
                 </div>
               </div>
               <!-- 原有客人列表 -->
-              <div class="sync-reply-label">選擇客人（最新對話優先）</div>
-              <div v-if="chatUsersLoading" class="empty-text">載入中...</div>
+              <div class="sync-reply-label">{{ $t('sync.select_label') }}</div>
+              <div v-if="chatUsersLoading" class="empty-text">{{ $t('common.loading') }}</div>
               <div v-else-if="chatUsers.length === 0" class="empty-text">
-                尚無客人記錄
-                <button class="sync-load-btn" @click="fetchChatUsers">載入客人列表</button>
+                {{ $t('sync.no_records') }}
+                <button class="sync-load-btn" @click="fetchChatUsers">{{ $t('sync.load_list') }}</button>
               </div>
               <div v-else class="sync-user-list">
                 <div
@@ -1743,11 +1706,11 @@ const statusIcons = {
             </div>
             <!-- 回覆輸入 -->
             <div class="sync-reply-input" v-if="selectedUserId">
-              <div class="sync-reply-target">回覆給：<strong>{{ selectedUserName }}</strong></div>
+              <div class="sync-reply-target">{{ $t('sync.reply_to') }}<strong>{{ selectedUserName }}</strong></div>
               <!-- 最近對話 -->
               <div class="recent-messages" v-if="recentMessages.length > 0 || recentMessagesLoading">
-                <div class="recent-messages-title">💬 最近對話</div>
-                <div v-if="recentMessagesLoading" class="empty-text">載入中...</div>
+                <div class="recent-messages-title">{{ $t('sync.recent_chat') }}</div>
+                <div v-if="recentMessagesLoading" class="empty-text">{{ $t('common.loading') }}</div>
                 <div v-else class="recent-messages-list">
                   <div v-for="(m, i) in recentMessages" :key="i" class="recent-msg-item" :class="{ 'msg-guest': m.role.includes('客人'), 'msg-ai': m.role.includes('AI') || m.role.includes('助理'), 'msg-admin': m.role.includes('管理員') }">
                     <div class="recent-msg-role">{{ m.role }} <span class="recent-msg-time">{{ m.timestamp }}</span></div>
@@ -1757,7 +1720,7 @@ const statusIcons = {
               </div>
               <textarea
                 v-model="syncReplyMessage"
-                placeholder="輸入你在 LINE OA Manager 回覆客人的內容..."
+                :placeholder="$t('sync.textarea_placeholder')"
                 rows="5"
                 class="sync-textarea"
               ></textarea>
@@ -1767,16 +1730,16 @@ const statusIcons = {
                   :disabled="!syncReplyMessage.trim() || syncReplyStatus === 'sending'"
                   @click="syncReply"
                 >
-                  {{ syncReplyStatus === 'sending' ? '發送中...' : '� 發送並記錄' }}
+                  {{ syncReplyStatus === 'sending' ? $t('sync.sending') : $t('sync.send_record') }}
                 </button>
-                <span v-if="syncReplyStatus === 'success'" class="sync-success">✅ 已發送給客人並記錄，AI 下次對話能看到</span>
-                <span v-if="syncReplyStatus === 'error'" class="sync-error">❌ 發送失敗</span>
+                <span v-if="syncReplyStatus === 'success'" class="sync-success">{{ $t('sync.send_success') }}</span>
+                <span v-if="syncReplyStatus === 'error'" class="sync-error">{{ $t('sync.send_fail') }}</span>
               </div>
               <!-- 歷史紀錄 -->
               <div class="sync-history">
-                <div class="sync-history-title">📋 已記錄的回覆</div>
-                <div v-if="syncHistoryLoading" class="empty-text">載入中...</div>
-                <div v-else-if="syncHistory.length === 0" class="sync-history-empty">尚無手動回覆紀錄</div>
+                <div class="sync-history-title">{{ $t('sync.history_title') }}</div>
+                <div v-if="syncHistoryLoading" class="empty-text">{{ $t('common.loading') }}</div>
+                <div v-else-if="syncHistory.length === 0" class="sync-history-empty">{{ $t('sync.history_empty') }}</div>
                 <div v-else class="sync-history-list">
                   <div v-for="(h, i) in syncHistory" :key="i" class="sync-history-item">
                     <div class="sync-history-time">{{ h.timestamp }}</div>
@@ -1786,7 +1749,7 @@ const statusIcons = {
               </div>
             </div>
             <div class="sync-reply-hint" v-else>
-              👈 請先從左側選擇要同步回覆的客人
+              {{ $t('sync.select_hint') }}
             </div>
           </div>
         </div>
@@ -1795,8 +1758,7 @@ const statusIcons = {
       <!-- 其他頁面佔位 -->
       <div v-else class="placeholder">
         <p style="text-align: center; color: #888; padding: 100px">
-          📦
-          {{ menuItems.find((m) => m.id === activeMenu)?.label }} 功能開發中...
+          {{ $t('common.developing', { page: $t(menuItems.find((m) => m.id === activeMenu)?.labelKey) }) }}
         </p>
       </div>
     </main>

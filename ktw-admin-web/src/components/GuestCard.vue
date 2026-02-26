@@ -7,7 +7,7 @@
           <span v-if="guest.registered_name && guest.registered_name !== guest.guest_name" class="booking-name-sub">（{{ guest.guest_name }}）</span>
         </span>
         <div class="header-info">
-          <span class="room-number">{{ guest.room_numbers?.join(', ') || '尚未排房' }}</span>
+          <span class="room-number">{{ guest.room_numbers?.join(', ') || t('guest_card.no_room') }}</span>
           <span class="booking-id">{{ guest.booking_id }}</span>
         </div>
       </div>
@@ -19,29 +19,29 @@
     <!-- 收折內容 -->
     <div v-if="isExpanded" class="guest-card-details">
       <div class="detail-row">
-        <span class="label">聯絡電話</span>
+        <span class="label">{{ t('guest_card.phone') }}</span>
         <span class="value" :class="{ 'from-bot': guest.phone_from_bot }">
           {{ guest.contact_phone || '-' }}
         </span>
       </div>
-      <div class="detail-row"><span class="label">入住日期</span><span class="value">{{ guest.check_in_date }}{{ guest.nights >= 2 ? ` (${guest.nights}晚)` : '' }}</span></div>
-      <div class="detail-row"><span class="label">退房日期</span><span class="value">{{ guest.check_out_date }}</span></div>
-      <div class="detail-row"><span class="label">訂房來源</span><span class="value">{{ guest.booking_source || '未知' }}</span></div>
-      <div class="detail-row"><span class="label">房型</span><span class="value">{{ guest.room_type_name || '尚未分配' }}</span></div>
-      <div class="detail-row"><span class="label">早餐</span><span class="value">{{ guest.breakfast || '依訂單' }}</span></div>
-      <div class="detail-row"><span class="label">已付訂金</span><span class="value price">NT$ {{ (guest.deposit_paid || 0).toLocaleString() }}</span></div>
-      <div class="detail-row"><span class="label">房價總額</span><span class="value price">NT$ {{ (guest.room_total || 0).toLocaleString() }}</span></div>
-      <div class="detail-row"><span class="label">應收尾款</span><span class="value price balance-due">NT$ {{ (guest.balance_due || 0).toLocaleString() }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.checkin_date') }}</span><span class="value">{{ guest.check_in_date }}{{ guest.nights >= 2 ? ` (${t('guest_card.nights', { n: guest.nights })})` : '' }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.checkout_date') }}</span><span class="value">{{ guest.check_out_date }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.booking_source') }}</span><span class="value">{{ guest.booking_source || t('guest_card.unknown') }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.room_type') }}</span><span class="value">{{ guest.room_type_name || t('guest_card.not_assigned') }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.breakfast') }}</span><span class="value">{{ guest.breakfast || t('guest_card.per_order') }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.deposit') }}</span><span class="value price">NT$ {{ (guest.deposit_paid || 0).toLocaleString() }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.total') }}</span><span class="value price">NT$ {{ (guest.room_total || 0).toLocaleString() }}</span></div>
+      <div class="detail-row"><span class="label">{{ t('guest_card.balance') }}</span><span class="value price balance-due">NT$ {{ (guest.balance_due || 0).toLocaleString() }}</span></div>
       <div class="detail-row">
-        <span class="label">預計抵達</span>
+        <span class="label">{{ t('guest_card.arrival_time') }}</span>
         <span class="value" :class="{ 'from-bot': guest.arrival_time_from_bot }">
-          {{ guest.arrival_time_from_bot || '未提供' }}
+          {{ guest.arrival_time_from_bot || t('guest_card.not_provided') }}
         </span>
       </div>
       <div class="detail-row">
-        <span class="label">LINE 姓名</span>
+        <span class="label">{{ t('guest_card.line_name') }}</span>
         <span class="value" :class="{ 'from-bot': guest.line_name }">
-          {{ guest.line_name || '待 AI 處理' }}
+          {{ guest.line_name || t('guest_card.pending_ai') }}
         </span>
       </div>
 
@@ -49,18 +49,18 @@
       <div class="supplement-section">
         <!-- 左欄：A.I. 提取需求 -->
         <div class="supplement-column">
-          <label class="section-label">🤖 A.I. 提取需求</label>
+          <label class="section-label">{{ t('guest_card.ai_requests') }}</label>
           <div class="ai-requests-box">
-            {{ guest.special_request_from_bot || '尚無特殊需求' }}
+            {{ guest.special_request_from_bot || t('guest_card.no_special') }}
           </div>
         </div>
 
         <!-- 右欄：櫃檯備註 -->
         <div class="supplement-column">
-          <label class="section-label">📝 櫃檯備註 (程序同步)</label>
+          <label class="section-label">{{ t('guest_card.counter_memo') }}</label>
           <textarea 
             class="staff-memo-area" 
-            placeholder="點擊輸入櫃檯備註... (自動儲存)" 
+            :placeholder="t('guest_card.memo_placeholder')" 
             v-model="localMemo"
             @blur="saveMemo"
           ></textarea>
@@ -73,6 +73,10 @@
 
 <script setup>
 import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+// i18n 翻譯函數
+const { t } = useI18n();
 
 // 共用房客卡片元件 (GuestCard)
 const props = defineProps({
@@ -105,7 +109,7 @@ function toggleExpand() {
 async function saveMemo() {
   if (localMemo.value === props.guest.staff_memo) return;
   
-  saveStatus.value = '正在儲存...';
+  saveStatus.value = t('guest_card.saving');
   try {
     const API_BASE = `http://${window.location.hostname}:3000`;
     const res = await fetch(`${API_BASE}/api/pms/supplements/${props.guest.pms_id || props.guest.booking_id}`, {
@@ -115,16 +119,16 @@ async function saveMemo() {
     });
     
     if (res.ok) {
-      saveStatus.value = '✅ 已儲存';
+      saveStatus.value = t('guest_card.saved');
       // 通知父組件更新資料 (可選，通常 WebSocket 會處理)
       // emit('update-guest', { ...props.guest, staff_memo: localMemo.value });
       setTimeout(() => { saveStatus.value = ''; }, 2000);
     } else {
-      saveStatus.value = '❌ 儲存失敗';
+      saveStatus.value = t('guest_card.save_fail');
     }
   } catch (err) {
     console.error('儲存備註失敗:', err);
-    saveStatus.value = '❌ 網路錯誤';
+    saveStatus.value = t('guest_card.network_error');
   }
 }
 </script>
