@@ -5,7 +5,7 @@
  */
 
 // Google Cloud Translation API Key（僅內網使用）
-const GOOGLE_TRANSLATE_API_KEY = 'AIzaSyBYLx48Yt0T4jRTqfjwVdCqqnHKla6pdTI';
+const GOOGLE_TRANSLATE_API_KEY = 'AIzaSyAwNn2iNJqIEhFRL2-XqKmLi7D_nLZVCtM';
 const TRANSLATE_API_URL = 'https://translation.googleapis.com/language/translate/v2';
 
 // ============================================================
