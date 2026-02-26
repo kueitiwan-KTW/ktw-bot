@@ -139,7 +139,9 @@
     "ai_assistant": "Asisten AI",
     "pms_api": "PMS API",
     "gmail": "Gmail",
-    "ngrok": "Ngrok"
+    "ngrok": "Ngrok",
+    "admin": "Admin",
+    "core": "Core"
   },
   "language": {
     "label": "🌐 Bahasa",

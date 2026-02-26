@@ -613,10 +613,11 @@ async function checkServiceStatus() {
           existing.status = apiService.status;
           existing.name = apiService.name;
         } else {
-          // 如果是新服務，加入到陣列
+          // 如果是新服務，加入到陣列（必須包含 nameKey 供 i18n 使用）
           services.value.push({
             id: apiService.id,
             name: apiService.name,
+            nameKey: `services.${apiService.id}`,
             icon: getServiceIcon(apiService.id),
             status: apiService.status,
           });
@@ -1114,7 +1115,7 @@ const statusIcons = {
     <!-- 主內容區 -->
     <main class="main-content">
       <header class="header">
-        <h2>{{ $t(menuItems.find((m) => m.id === activeMenu)?.labelKey) }}</h2>
+        <h2>{{ $t(menuItems.find((m) => m.id === activeMenu)?.labelKey || 'nav.dashboard') }}</h2>
         <div class="header-right">
           <div v-if="activeMenu === 'dashboard'" class="refresh-group">
             <div class="countdown-timer" :class="{ warning: countdown <= 5 }">
@@ -1135,7 +1136,7 @@ const statusIcons = {
               :key="service.id"
               class="header-service-item"
             >
-              <span class="service-name-small">{{ $t(service.nameKey) }}</span>
+              <span class="service-name-small">{{ service.nameKey ? $t(service.nameKey) : service.name }}</span>
               <span class="service-status-dot" :class="service.status"></span>
             </div>
           </div>
