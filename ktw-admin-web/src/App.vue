@@ -165,12 +165,25 @@ function sortGuestsByStatus(guests) {
 }
 
 // 計算 tab 的總房間數（非組數）
+// 資料來源可能有兩種格式：
+// 1. group.items[] 裡有 room_count（訂單管理用的 grouped 格式）
+// 2. group.room_type_name 裡含 "xN" 數量（如 "標準雙人房 x4, 豪華雙人房 x6"）
 function getTabRoomCount(offset) {
   const tab = guestTabs[offset.toString()];
   if (!tab || !tab.data) return 0;
   return tab.data.reduce((sum, group) => {
-    if (group.items && Array.isArray(group.items)) {
+    // 優先用 items 陣列計算
+    if (group.items && group.items.length > 0) {
       return sum + group.items.reduce((s, item) => s + (item.room_count || 1), 0);
+    }
+    // 從 room_type_name 解析 xN（例："標準三人房 x4, 標準雙人房 x6"）
+    if (group.room_type_name) {
+      const matches = group.room_type_name.match(/x(\d+)/g);
+      if (matches && matches.length > 0) {
+        return sum + matches.reduce((s, m) => s + parseInt(m.slice(1), 10), 0);
+      }
+      // 沒有 xN 表示只有 1 間（例："豪華雙人房"）
+      return sum + 1;
     }
     return sum + 1;
   }, 0);
