@@ -1042,8 +1042,10 @@ function hideTooltip() {
 
 const activeMenu = ref("dashboard");
 const sidebarOpen = ref(false);
+const sidebarCollapsed = ref(false);
 function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value; }
 function closeSidebar() { sidebarOpen.value = false; }
+function toggleCollapse() { sidebarCollapsed.value = !sidebarCollapsed.value; }
 
 // 處理 menu 切換，切回 dashboard 時重新佈局 GridStack
 function switchMenu(menuId) {
@@ -1099,7 +1101,7 @@ const statusIcons = {
 </script>
 
 <template>
-  <div id="app">
+  <div id="app" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <!-- 漢堡選單按鈕（手機用） -->
     <div class="mobile-top-bar">
       <button class="hamburger-btn" @click="toggleSidebar" aria-label="Menu">
@@ -1115,10 +1117,13 @@ const statusIcons = {
     <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="closeSidebar"></div>
 
     <!-- 側邊欄 -->
-    <aside class="sidebar" :class="{ open: sidebarOpen }">
+    <aside class="sidebar" :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
-        <h1>{{ $t('header.title') }}</h1>
-        <p>{{ $t('header.subtitle') }}</p>
+        <h1 v-if="!sidebarCollapsed">{{ $t('header.title') }}</h1>
+        <p v-if="!sidebarCollapsed">{{ $t('header.subtitle') }}</p>
+        <button class="collapse-btn" @click="toggleCollapse" :title="sidebarCollapsed ? '展開' : '收合'">
+          {{ sidebarCollapsed ? '▶' : '◀' }}
+        </button>
       </div>
 
       <!-- 語言切換 -->

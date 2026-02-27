@@ -27,6 +27,7 @@ body {
   backdrop-filter: blur(10px);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   padding: 20px 0;
+  transition: width 0.3s ease;
 }
 
 .sidebar-header {
@@ -101,6 +102,57 @@ body {
 
 .widget-toggle input[type="checkbox"] {
   accent-color: #00d4ff;
+}
+
+/* 收合按鈕 */
+.collapse-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #888;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+.collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ccc;
+}
+
+/* Sidebar 收合狀態 */
+.sidebar.collapsed {
+  width: 60px;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 10px 8px;
+}
+
+.sidebar.collapsed .language-switcher,
+.sidebar.collapsed .widget-controls {
+  display: none;
+}
+
+.sidebar.collapsed .nav-menu {
+  padding: 10px 0;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.sidebar.collapsed .nav-item span:not(.nav-icon) {
+  display: none;
+}
+
+.sidebar.collapsed .nav-icon {
+  font-size: 1.4rem;
+  margin: 0;
 }
 
 /* 語言切換器 */
