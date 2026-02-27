@@ -1361,7 +1361,7 @@ app.get('/api/chat/sync-history/:user_id', (req, res) => {
 app.get('/api/chat/recent/:user_id', (req, res) => {
     try {
         const { user_id } = req.params;
-        const count = parseInt(req.query.count) || 3;
+        const count = parseInt(req.query.count) || 5;
         const logPath = join(CHAT_LOGS_DIR, `${user_id}.txt`);
         
         if (!existsSync(logPath)) {

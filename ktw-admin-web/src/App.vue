@@ -360,7 +360,7 @@ async function fetchRecentMessages(userId) {
   if (!userId) { recentMessages.value = []; return; }
   recentMessagesLoading.value = true;
   try {
-    const res = await fetch(`${API_BASE}/api/chat/recent/${userId}?count=3`, {
+    const res = await fetch(`${API_BASE}/api/chat/recent/${userId}?count=5`, {
       signal: AbortSignal.timeout(5000),
     });
     if (res.ok) {
