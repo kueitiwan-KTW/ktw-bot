@@ -1101,9 +1101,15 @@ const statusIcons = {
 <template>
   <div id="app">
     <!-- 漢堡選單按鈕（手機用） -->
-    <button class="hamburger-btn" @click="toggleSidebar" aria-label="Menu">
-      <span></span><span></span><span></span>
-    </button>
+    <div class="mobile-top-bar">
+      <button class="hamburger-btn" @click="toggleSidebar" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="mobile-lang-toggle">
+        <button :class="{ active: locale === 'zh-TW' }" @click="switchLanguage('zh-TW')">中</button>
+        <button :class="{ active: locale === 'id' }" @click="switchLanguage('id')">ID</button>
+      </div>
+    </div>
 
     <!-- Sidebar overlay（手機時點擊關閉） -->
     <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="closeSidebar"></div>
