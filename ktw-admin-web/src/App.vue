@@ -164,6 +164,18 @@ function sortGuestsByStatus(guests) {
   });
 }
 
+// 計算 tab 的總房間數（非組數）
+function getTabRoomCount(offset) {
+  const tab = guestTabs[offset.toString()];
+  if (!tab || !tab.data) return 0;
+  return tab.data.reduce((sum, group) => {
+    if (group.items && Array.isArray(group.items)) {
+      return sum + group.items.reduce((s, item) => s + (item.room_count || 1), 0);
+    }
+    return sum + 1;
+  }, 0);
+}
+
 // ============================================
 // AI 需求速覽（複用 guestTabs 資料）
 // ============================================
@@ -1576,7 +1588,7 @@ const statusIcons = {
                   {{ getTabLabel(cfg) }}
                   <span class="tab-count"
                     >({{
-                      guestTabs[cfg.offset.toString()]?.data.length || 0
+                      getTabRoomCount(cfg.offset)
                     }})</span
                   >
                 </button>
