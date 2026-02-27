@@ -1041,6 +1041,9 @@ function hideTooltip() {
 }
 
 const activeMenu = ref("dashboard");
+const sidebarOpen = ref(false);
+function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value; }
+function closeSidebar() { sidebarOpen.value = false; }
 
 // 處理 menu 切換，切回 dashboard 時重新佈局 GridStack
 function switchMenu(menuId) {
@@ -1097,8 +1100,16 @@ const statusIcons = {
 
 <template>
   <div id="app">
+    <!-- 漢堡選單按鈕（手機用） -->
+    <button class="hamburger-btn" @click="toggleSidebar" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+
+    <!-- Sidebar overlay（手機時點擊關閉） -->
+    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="closeSidebar"></div>
+
     <!-- 側邊欄 -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
         <h1>{{ $t('header.title') }}</h1>
         <p>{{ $t('header.subtitle') }}</p>
@@ -1118,7 +1129,7 @@ const statusIcons = {
           :key="item.id"
           class="nav-item"
           :class="{ active: activeMenu === item.id }"
-          @click="switchMenu(item.id)"
+          @click="switchMenu(item.id); closeSidebar()"
         >
           <span class="nav-icon">{{ item.icon }}</span>
           <span>{{ $t(item.labelKey) }}</span>
