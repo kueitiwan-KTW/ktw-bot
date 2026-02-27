@@ -1103,6 +1103,15 @@ const statusIcons = {
         <h1>{{ $t('header.title') }}</h1>
         <p>{{ $t('header.subtitle') }}</p>
       </div>
+
+      <!-- 語言切換 -->
+      <div class="language-switcher">
+        <div class="lang-buttons">
+          <button :class="{ active: locale === 'zh-TW' }" @click="switchLanguage('zh-TW')">{{ $t('language.zh_tw') }}</button>
+          <button :class="{ active: locale === 'id' }" @click="switchLanguage('id')">{{ $t('language.id') }}</button>
+        </div>
+      </div>
+
       <ul class="nav-menu">
         <li
           v-for="item in menuItems"
@@ -1129,14 +1138,7 @@ const statusIcons = {
         </label>
       </div>
 
-      <!-- 語言切換 -->
-      <div class="language-switcher">
-        <h4>{{ $t('language.label') }}</h4>
-        <div class="lang-buttons">
-          <button :class="{ active: locale === 'zh-TW' }" @click="switchLanguage('zh-TW')">{{ $t('language.zh_tw') }}</button>
-          <button :class="{ active: locale === 'id' }" @click="switchLanguage('id')">{{ $t('language.id') }}</button>
-        </div>
-      </div>
+
     </aside>
 
     <!-- 主內容區 -->
