@@ -50,6 +50,13 @@ body {
   margin-top: 5px;
 }
 
+/* 標題列（logo + 收合按鈕同一行） */
+.sidebar-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .nav-menu {
   list-style: none;
   padding: 20px 0;
@@ -158,8 +165,7 @@ body {
 /* 語言切換器 */
 .language-switcher {
   padding: 15px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: 15px;
+  margin-top: 5px;
 }
 
 .language-switcher h4 {

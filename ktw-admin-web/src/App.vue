@@ -1119,11 +1119,13 @@ const statusIcons = {
     <!-- 側邊欄 -->
     <aside class="sidebar" :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
-        <h1 v-if="!sidebarCollapsed">{{ $t('header.title') }}</h1>
+        <div class="sidebar-title-row">
+          <h1 v-if="!sidebarCollapsed">{{ $t('header.title') }}</h1>
+          <button class="sidebar-collapse-btn" @click="toggleSidebarCollapse" :title="sidebarCollapsed ? '展開' : '收合'">
+            {{ sidebarCollapsed ? '▶' : '◀' }}
+          </button>
+        </div>
         <p v-if="!sidebarCollapsed">{{ $t('header.subtitle') }}</p>
-        <button class="sidebar-collapse-btn" @click="toggleSidebarCollapse" :title="sidebarCollapsed ? '展開' : '收合'">
-          {{ sidebarCollapsed ? '▶' : '◀' }}
-        </button>
       </div>
 
       <!-- 語言切換 -->
