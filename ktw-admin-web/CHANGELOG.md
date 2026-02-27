@@ -1,5 +1,65 @@
 # KTW Admin Dashboard - 版本歷史
 
+## v1.6.0 (2026-02-27)
+
+### ✨ 新功能：RWD 響應式設計 + Sidebar 收合
+
+#### 1. 手機版 RWD（≤768px）
+
+**檔案**: `src/App.vue`, `src/style.css`
+
+- **漢堡選單** ☰：固定左上角，點擊滑出 sidebar 抽屜
+- **Sidebar overlay**：半透明遮罩，點擊或選擇選單項目後自動關閉
+- **手機頂部工具列**：漢堡按鈕 + 語言切換（中/ID），不需開 sidebar 即可切語言
+- **Dashboard grid**：卡片 2 欄排列，stat 數字縮小
+- **客人卡片**：單欄堆疊，取消最大高度限制
+- **日期 tabs**：水平可捲動，避免換行
+- **房間格子**：`minmax(40px, 1fr)` 適配窄寬
+- **Modal**：寬度 95%，接近全螢幕
+
+#### 2. 平板版 RWD（769px ~ 1024px）
+
+- Sidebar 縮窄至 200px
+- 服務狀態列允許換行
+- Dashboard grid 最小欄寬 200px
+
+#### 3. 桌面版 Sidebar 收合/展開
+
+- **收合按鈕** ◀/▶：與 KTW Admin 標題同一行
+- 收合後 sidebar 縮至 60px，僅顯示圖示 icon
+- 語言切換、控制面板等收合時自動隱藏
+- `transition: width 0.3s` 平滑動畫
+
+### 🐛 Bug 修復
+
+1. **Tab 房間數顯示錯誤**
+   - **問題**: 入住資訊 tab 括弧數字顯示「組數」而非「房間數」
+   - **修復**: 新增 `getTabRoomCount()` 函式
+   - **邏輯**:
+     - 有 `items[]` → 加總各 item 的 `room_count`
+     - 無 `items[]` → 從 `room_type_name` 解析 `xN`（如 `標準三人房 x4, 標準雙人房 x6` → 10）
+     - 無 `xN` → 算 1 間
+
+2. **語言切換 sidebar 收合後不可用**
+   - **修復**: 手機版新增頂部工具列，sidebar 關閉時仍可切換語言
+
+3. **Sidebar 雙線問題**
+   - **問題**: `sidebar-header` 的 `border-bottom` 與 `language-switcher` 的 `border-top` 重疊
+   - **修復**: 移除 `language-switcher` 的 `border-top`
+
+4. **`toggleCollapse` 命名衝突**
+   - **問題**: sidebar 收合函式與面板收合函式同名導致編譯錯誤
+   - **修復**: 重命名為 `toggleSidebarCollapse`，CSS class 改為 `sidebar-collapse-btn`
+
+### 📝 修改的文件
+
+| 檔案 | 變更說明 |
+|------|----------|
+| `src/App.vue` | 漢堡選單、sidebar 收合、手機語言切換、`getTabRoomCount()` |
+| `src/style.css` | 315+ 行 media queries、收合按鈕樣式、mobile-top-bar |
+
+---
+
 ## v1.5.0 (2026-02-26)
 
 ### ✨ 新功能：多語系國際化（i18n）+ API 內容即時翻譯
