@@ -104,8 +104,8 @@ body {
   accent-color: #00d4ff;
 }
 
-/* 收合按鈕 */
-.collapse-btn {
+/* 側邊欄收合按鈕 */
+.sidebar-collapse-btn {
   background: none;
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #888;
@@ -117,7 +117,7 @@ body {
   margin-top: 8px;
 }
 
-.collapse-btn:hover {
+.sidebar-collapse-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ccc;
 }

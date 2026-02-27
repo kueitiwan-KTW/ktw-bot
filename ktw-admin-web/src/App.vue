@@ -1045,7 +1045,7 @@ const sidebarOpen = ref(false);
 const sidebarCollapsed = ref(false);
 function toggleSidebar() { sidebarOpen.value = !sidebarOpen.value; }
 function closeSidebar() { sidebarOpen.value = false; }
-function toggleCollapse() { sidebarCollapsed.value = !sidebarCollapsed.value; }
+function toggleSidebarCollapse() { sidebarCollapsed.value = !sidebarCollapsed.value; }
 
 // 處理 menu 切換，切回 dashboard 時重新佈局 GridStack
 function switchMenu(menuId) {
@@ -1121,7 +1121,7 @@ const statusIcons = {
       <div class="sidebar-header">
         <h1 v-if="!sidebarCollapsed">{{ $t('header.title') }}</h1>
         <p v-if="!sidebarCollapsed">{{ $t('header.subtitle') }}</p>
-        <button class="collapse-btn" @click="toggleCollapse" :title="sidebarCollapsed ? '展開' : '收合'">
+        <button class="sidebar-collapse-btn" @click="toggleSidebarCollapse" :title="sidebarCollapsed ? '展開' : '收合'">
           {{ sidebarCollapsed ? '▶' : '◀' }}
         </button>
       </div>
