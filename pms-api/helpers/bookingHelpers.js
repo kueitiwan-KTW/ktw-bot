@@ -265,7 +265,12 @@ async function getEffectiveStatus(connection, bookingId, originalStatusCode) {
  * @returns {Promise<Array>} 訂單清單
  */
 async function getCheckinBookings(connection, dateOffset, statusFilter) {
-    // 主查詢 - 只查 ORDER_MN 避免重複，guest 資料用子查詢取第一筆
+    // 計算查看日期（用於續住判斷）
+    const viewedDate = new Date();
+    viewedDate.setDate(viewedDate.getDate() + dateOffset);
+    const viewedDateStr = viewedDate.toISOString().split('T')[0];
+
+    // 主查詢：原始入住 + 續住客（CI_DAT 更早但 CO_DAT 尚未到）
     const sql = `
         SELECT 
             TRIM(om.IKEY) as booking_id,
@@ -282,8 +287,14 @@ async function getCheckinBookings(connection, dateOffset, statusFilter) {
             (SELECT TRIM(ALT_NAM) FROM GDWUUKT.GUEST_MN WHERE TRIM(IKEY) = TRIM(om.IKEY) AND ROWNUM = 1) as registered_name,
             (SELECT TRIM(ID_COD) FROM GDWUUKT.GUEST_MN WHERE TRIM(IKEY) = TRIM(om.IKEY) AND ROWNUM = 1) as id_number
         FROM GDWUUKT.ORDER_MN om
-        WHERE TRUNC(om.CI_DAT) = TRUNC(SYSDATE + :dateOffset)
-          AND om.ORDER_STA IN (${statusFilter})
+        WHERE (
+            (TRUNC(om.CI_DAT) = TRUNC(SYSDATE + :dateOffset) AND om.ORDER_STA IN (${statusFilter}))
+            OR (
+                TRUNC(om.CI_DAT) < TRUNC(SYSDATE + :dateOffset)
+                AND TRUNC(om.CO_DAT) > TRUNC(SYSDATE + :dateOffset)
+                AND om.ORDER_STA = 'I'
+            )
+        )
         ORDER BY om.CI_DAT
     `;
 
@@ -304,8 +315,9 @@ async function getCheckinBookings(connection, dateOffset, statusFilter) {
         // 使用統一的狀態判斷函數 (DRY)
         let { statusCode, statusName } = await getEffectiveStatus(connection, bookingId, row[9]);
 
-        // 續住判斷：過去日期的 Tab 中，仍在住的客人標記為「續住中」
-        if (dateOffset < 0 && statusCode === 'I') {
+        // 續住判斷：入住日期早於查看日期且仍在住 → 標記為「續住中」
+        const checkInDate = row[6];  // 'YYYY-MM-DD' 格式
+        if (statusCode === 'I' && checkInDate < viewedDateStr) {
             statusCode = 'SI';
             statusName = getStatusName('SI');
         }
