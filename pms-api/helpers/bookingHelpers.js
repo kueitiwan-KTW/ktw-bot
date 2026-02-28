@@ -176,38 +176,49 @@ async function getRoomStatus(connection, bookingId) {
  */
 async function getAssignStatus(connection, bookingId) {
     try {
-        // 查詢所有房間狀態，優先判斷是否有仍在入住的房間
+        // 按房號分組，每間房取最新一筆狀態（按 BEGIN_DAT DESC）
         const result = await connection.execute(
-            `SELECT TRIM(STATUS_COD) 
-             FROM GDWUUKT.ASSIGN_DT 
-             WHERE TRIM(IKEY) = :booking_id
-             ORDER BY BEGIN_DAT DESC`,
+            `SELECT TRIM(ROOM_NOS), TRIM(STATUS_COD)
+             FROM (
+                 SELECT ROOM_NOS, STATUS_COD,
+                        ROW_NUMBER() OVER (PARTITION BY ROOM_NOS ORDER BY BEGIN_DAT DESC) as rn
+                 FROM GDWUUKT.ASSIGN_DT
+                 WHERE TRIM(IKEY) = :booking_id
+             )
+             WHERE rn = 1`,
             { booking_id: bookingId }
         );
         
         if (!result.rows || result.rows.length === 0) {
+            console.log(`🔍 [DEBUG] ${bookingId}: ASSIGN_DT 無記錄`);
             return null;
         }
         
-        // 收集所有狀態
-        const statuses = result.rows.map(r => r[0]);
+        // 每間房的最新狀態
+        const roomStatuses = result.rows.map(r => ({ room: r[0], status: r[1] }));
+        console.log(`🔍 [DEBUG] ${bookingId}: 每間房最新狀態 = ${JSON.stringify(roomStatuses)}`);
         
-        // 優先級：如果有任何入住中狀態（C/I 或 CHGROOMC/I），表示仍在住
-        const hasCheckedIn = statuses.some(s => s && (s.includes('C/I') && !s.startsWith('C/O')));
+        // 判斷：如果有任何房間的最新狀態是入住中（C/I 或 CHGROOMC/I），表示仍在住
+        const hasCheckedIn = roomStatuses.some(rs => 
+            rs.status && (rs.status.includes('C/I') && !rs.status.startsWith('C/O'))
+        );
         if (hasCheckedIn) {
-            // 返回換房入住狀態（如果有 CHGROOMC/I）或普通入住狀態
-            const roomChangeStatus = statuses.find(s => s && s.includes('CHGROOM'));
-            return roomChangeStatus || 'C/I';
+            const roomChangeStatus = roomStatuses.find(rs => rs.status && rs.status.includes('CHGROOM'));
+            console.log(`🔍 [DEBUG] ${bookingId}: hasCheckedIn=true → 返回 ${roomChangeStatus?.status || 'C/I'}`);
+            return roomChangeStatus?.status || 'C/I';
         }
         
-        // 如果所有房間都是 C/O，則已退房
-        const allCheckedOut = statuses.every(s => s && s === 'C/O');
+        // 如果所有房間的最新狀態都是 C/O，則已退房
+        const allCheckedOut = roomStatuses.every(rs => rs.status && rs.status === 'C/O');
         if (allCheckedOut) {
+            console.log(`🔍 [DEBUG] ${bookingId}: allCheckedOut=true → 返回 C/O`);
             return 'C/O';
         }
         
-        // 返回最新狀態
-        return statuses[0];
+        // 其他情況返回第一間房的最新狀態
+        const fallback = roomStatuses[0]?.status;
+        console.log(`🔍 [DEBUG] ${bookingId}: 走預設邏輯 → 返回 ${fallback}`);
+        return fallback;
     } catch (err) {
         console.log(`查詢入住退房狀態失敗 (${bookingId}):`, err.message);
         return null;
@@ -238,6 +249,8 @@ async function getEffectiveStatus(connection, bookingId, originalStatusCode) {
         }
     }
 
+    console.log(`🔍 [DEBUG] ${bookingId}: getEffectiveStatus originalStatus=${originalStatusCode} → assignStatus=${assignStatus} → final=${statusCode}`);
+    
     return {
         statusCode: statusCode,
         statusName: getStatusName(statusCode)
