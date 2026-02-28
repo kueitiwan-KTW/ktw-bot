@@ -170,25 +170,37 @@ function sortGuestsByStatus(guests) {
 // 2. group.room_type_name 裡含 "xN" 數量（如 "標準雙人房 x4, 豪華雙人房 x6"）
 function getTabRoomCount(offset) {
   const tab = guestTabs[offset.toString()];
-  if (!tab || !tab.data) return 0;
-  // 排除續住客 (SI) 和預計退房 (EO)，只計算當日入住的房間數
-  const filtered = tab.data.filter(g => g.status_code !== 'SI' && g.status_code !== 'EO');
-  return filtered.reduce((sum, group) => {
-    // 優先用 items 陣列計算
+  if (!tab || !tab.data) return '0';
+
+  // 計算單一 group 的房間數
+  const countRooms = (group) => {
     if (group.items && group.items.length > 0) {
-      return sum + group.items.reduce((s, item) => s + (item.room_count || 1), 0);
+      return group.items.reduce((s, item) => s + (item.room_count || 1), 0);
     }
-    // 從 room_type_name 解析 xN（例："標準三人房 x4, 標準雙人房 x6"）
     if (group.room_type_name) {
       const matches = group.room_type_name.match(/x(\d+)/g);
       if (matches && matches.length > 0) {
-        return sum + matches.reduce((s, m) => s + parseInt(m.slice(1), 10), 0);
+        return matches.reduce((s, m) => s + parseInt(m.slice(1), 10), 0);
       }
-      // 沒有 xN 表示只有 1 間（例："豪華雙人房"）
-      return sum + 1;
+      return 1;
     }
-    return sum + 1;
-  }, 0);
+    return 1;
+  };
+
+  // 區分新住與續住（SI + EO）
+  let newRooms = 0;
+  let stayRooms = 0;
+  tab.data.forEach(g => {
+    const rooms = countRooms(g);
+    if (g.status_code === 'SI' || g.status_code === 'EO') {
+      stayRooms += rooms;
+    } else {
+      newRooms += rooms;
+    }
+  });
+
+  // 有續住時顯示 "13+1"，無續住時只顯示數字
+  return stayRooms > 0 ? `${newRooms}+${stayRooms}` : `${newRooms}`;
 }
 
 // ============================================
