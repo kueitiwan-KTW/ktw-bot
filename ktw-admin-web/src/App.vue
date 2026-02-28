@@ -155,7 +155,7 @@ async function fetchPMSDashboard() {
   }
 }
 // 狀態排序邏輯 (DRY 原則)：N/R 優先，I 次之，其他依序
-const STATUS_PRIORITY = { N: 0, R: 1, I: 2, O: 3, D: 4, C: 5, S: 6, CO: 7 };
+const STATUS_PRIORITY = { N: 0, R: 1, I: 2, SI: 3, O: 4, D: 5, C: 6, S: 7, CO: 8 };
 function sortGuestsByStatus(guests) {
   return [...guests].sort((a, b) => {
     const priorityA = STATUS_PRIORITY[a.status_code] ?? 99;

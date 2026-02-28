@@ -18,6 +18,7 @@ const API_VALUE_MAP = {
   '新訂單': 'api.status_new',
   '已確認': 'api.status_confirmed',
   '已入住': 'api.status_checked_in',
+  '續住中': 'api.status_staying',
   '已取消': 'api.status_cancelled',
   '已退房': 'api.status_checked_out',
   'No Show': 'api.status_no_show',

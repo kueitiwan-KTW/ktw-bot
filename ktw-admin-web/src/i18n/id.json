@@ -152,6 +152,7 @@
     "status_new": "Pesanan Baru",
     "status_confirmed": "Dikonfirmasi",
     "status_checked_in": "Sudah Check-in",
+    "status_staying": "Masih Menginap",
     "status_cancelled": "Dibatalkan",
     "status_checked_out": "Sudah Check-out",
     "status_no_show": "No Show",

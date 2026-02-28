@@ -1120,9 +1120,14 @@ body {
   color: #ff9800;
 }
 
-/* 預約中 */
+/* 已入住 */
 .status-I {
   color: #2196f3;
+}
+
+/* 續住中 */
+.status-SI {
+  color: #7c4dff;
 }
 
 /* 已退房 (D 或 CO) */
@@ -1261,6 +1266,11 @@ body {
   color: #2196f3;
 }
 
+.guest-card-status.status-SI {
+  background: rgba(124, 77, 255, 0.2);
+  color: #7c4dff;
+}
+
 .guest-card-status.status-D,
 .guest-card-status.status-CO {
   background: rgba(158, 158, 158, 0.2);
@@ -1350,12 +1360,22 @@ body {
 
 /* I = 已入住 (黃色調 - 進行中) */
 .guest-card.card-status-I {
-  background: rgba(255, 193, 7, 0.15);
+  background: rgba(255, 193, 7, 0.12);
   border-left: 4px solid #ffc107;
 }
 
 .guest-card.card-status-I:hover {
   background: rgba(255, 193, 7, 0.22);
+}
+
+/* SI = 續住中 (紫色調 - 區別於入住當日) */
+.guest-card.card-status-SI {
+  background: rgba(124, 77, 255, 0.10);
+  border-left: 4px solid #7c4dff;
+}
+
+.guest-card.card-status-SI:hover {
+  background: rgba(124, 77, 255, 0.18);
 }
 
 /* D / CO = 已退房 (綠色調 - 完成) */

@@ -9,6 +9,7 @@
 const STATUS_MAP = {
     'O': '已確認',
     'I': '已入住',
+    'SI': '續住中',
     'N': '新訂單',
     'R': '預約中',
     'D': '已取消',
@@ -301,7 +302,13 @@ async function getCheckinBookings(connection, dateOffset, statusFilter) {
         ]);
 
         // 使用統一的狀態判斷函數 (DRY)
-        const { statusCode, statusName } = await getEffectiveStatus(connection, bookingId, row[9]);
+        let { statusCode, statusName } = await getEffectiveStatus(connection, bookingId, row[9]);
+
+        // 續住判斷：過去日期的 Tab 中，仍在住的客人標記為「續住中」
+        if (dateOffset < 0 && statusCode === 'I') {
+            statusCode = 'SI';
+            statusName = getStatusName('SI');
+        }
 
         return {
             booking_id: bookingId,
