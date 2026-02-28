@@ -1125,8 +1125,9 @@ body {
   color: #2196f3;
 }
 
-/* 已入住 */
-.status-D {
+/* 已退房 (D 或 CO) */
+.status-D,
+.status-CO {
   color: #9e9e9e;
 }
 
@@ -1260,7 +1261,8 @@ body {
   color: #2196f3;
 }
 
-.guest-card-status.status-D {
+.guest-card-status.status-D,
+.guest-card-status.status-CO {
   background: rgba(158, 158, 158, 0.2);
   color: #9e9e9e;
 }
@@ -1356,13 +1358,15 @@ body {
   background: rgba(255, 193, 7, 0.22);
 }
 
-/* D = 已退房 (綠色調 - 完成) */
-.guest-card.card-status-D {
+/* D / CO = 已退房 (綠色調 - 完成) */
+.guest-card.card-status-D,
+.guest-card.card-status-CO {
   background: rgba(76, 175, 80, 0.12);
   border-left: 4px solid #4caf50;
 }
 
-.guest-card.card-status-D:hover {
+.guest-card.card-status-D:hover,
+.guest-card.card-status-CO:hover {
   background: rgba(76, 175, 80, 0.18);
 }
 

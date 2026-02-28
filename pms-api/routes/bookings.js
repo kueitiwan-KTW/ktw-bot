@@ -385,8 +385,15 @@ router.get('/checkin-by-date', async (req, res) => {
         const connection = await pool.getConnection();
 
         try {
-            // 未來日期用預訂狀態，過去/今天用入住狀態
-            const statusFilter = dateOffset > 1 ? "'O','N','R'" : "'O','I','N'";
+            // 過去日期查所有狀態（含退房、取消），今日用入住狀態，未來用預訂狀態
+            let statusFilter;
+            if (dateOffset < 0) {
+                statusFilter = "'O','I','N','D','C','S'";  // 過去：顯示所有狀態
+            } else if (dateOffset > 1) {
+                statusFilter = "'O','N','R'";  // 未來：只顯示預訂中
+            } else {
+                statusFilter = "'O','I','N'";  // 今日/明日：顯示待入住+已入住
+            }
             const bookings = await getCheckinBookings(connection, dateOffset, statusFilter);
 
             res.json({
