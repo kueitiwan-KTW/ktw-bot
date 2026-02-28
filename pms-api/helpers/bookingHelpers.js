@@ -191,13 +191,11 @@ async function getAssignStatus(connection, bookingId) {
         );
         
         if (!result.rows || result.rows.length === 0) {
-            console.log(`🔍 [DEBUG] ${bookingId}: ASSIGN_DT 無記錄`);
             return null;
         }
         
         // 每間房的最新狀態
         const roomStatuses = result.rows.map(r => ({ room: r[0], status: r[1] }));
-        console.log(`🔍 [DEBUG] ${bookingId}: 每間房最新狀態 = ${JSON.stringify(roomStatuses)}`);
         
         // 判斷：如果有任何房間的最新狀態是入住中（C/I 或 CHGROOMC/I），表示仍在住
         const hasCheckedIn = roomStatuses.some(rs => 
@@ -205,20 +203,17 @@ async function getAssignStatus(connection, bookingId) {
         );
         if (hasCheckedIn) {
             const roomChangeStatus = roomStatuses.find(rs => rs.status && rs.status.includes('CHGROOM'));
-            console.log(`🔍 [DEBUG] ${bookingId}: hasCheckedIn=true → 返回 ${roomChangeStatus?.status || 'C/I'}`);
             return roomChangeStatus?.status || 'C/I';
         }
         
         // 如果所有房間的最新狀態都是 C/O，則已退房
         const allCheckedOut = roomStatuses.every(rs => rs.status && rs.status === 'C/O');
         if (allCheckedOut) {
-            console.log(`🔍 [DEBUG] ${bookingId}: allCheckedOut=true → 返回 C/O`);
             return 'C/O';
         }
         
         // 其他情況返回第一間房的最新狀態
         const fallback = roomStatuses[0]?.status;
-        console.log(`🔍 [DEBUG] ${bookingId}: 走預設邏輯 → 返回 ${fallback}`);
         return fallback;
     } catch (err) {
         console.log(`查詢入住退房狀態失敗 (${bookingId}):`, err.message);
@@ -250,8 +245,6 @@ async function getEffectiveStatus(connection, bookingId, originalStatusCode) {
         }
     }
 
-    console.log(`🔍 [DEBUG] ${bookingId}: getEffectiveStatus originalStatus=${originalStatusCode} → assignStatus=${assignStatus} → final=${statusCode}`);
-    
     return {
         statusCode: statusCode,
         statusName: getStatusName(statusCode)
@@ -265,10 +258,10 @@ async function getEffectiveStatus(connection, bookingId, originalStatusCode) {
  * @returns {Promise<Array>} 訂單清單
  */
 async function getCheckinBookings(connection, dateOffset, statusFilter) {
-    // 計算查看日期（用於續住判斷）
+    // 計算查看日期（用本地時間，避免 UTC 時差問題）
     const viewedDate = new Date();
     viewedDate.setDate(viewedDate.getDate() + dateOffset);
-    const viewedDateStr = viewedDate.toISOString().split('T')[0];
+    const viewedDateStr = `${viewedDate.getFullYear()}-${String(viewedDate.getMonth() + 1).padStart(2, '0')}-${String(viewedDate.getDate()).padStart(2, '0')}`;
 
     // 主查詢：原始入住 + 續住客（CI_DAT 更早但 CO_DAT 尚未到）
     const sql = `
@@ -291,8 +284,8 @@ async function getCheckinBookings(connection, dateOffset, statusFilter) {
             (TRUNC(om.CI_DAT) = TRUNC(SYSDATE + :dateOffset) AND om.ORDER_STA IN (${statusFilter}))
             OR (
                 TRUNC(om.CI_DAT) < TRUNC(SYSDATE + :dateOffset)
-                AND TRUNC(om.CO_DAT) > TRUNC(SYSDATE + :dateOffset)
-                AND om.ORDER_STA = 'I'
+                AND TRUNC(om.CO_DAT) >= TRUNC(SYSDATE + :dateOffset)
+                AND om.ORDER_STA IN ('I', 'O')
             )
         )
         ORDER BY om.CI_DAT
@@ -344,7 +337,13 @@ async function getCheckinBookings(connection, dateOffset, statusFilter) {
         };
     }));
 
-    return bookings;
+    // 過濾：排除非入住日的已退房客人（只保留入住當日 + 續住中）
+    return bookings.filter(b => {
+        if (b.check_in_date < viewedDateStr && b.status_code === 'CO') {
+            return false;  // 排除已退房的續住客
+        }
+        return true;
+    });
 }
 
 module.exports = {
