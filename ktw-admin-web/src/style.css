@@ -1130,6 +1130,11 @@ body {
   color: #7c4dff;
 }
 
+/* 預計退房 */
+.status-EO {
+  color: #ff6d00;
+}
+
 /* 已退房 (D 或 CO) */
 .status-D,
 .status-CO {
@@ -1271,6 +1276,11 @@ body {
   color: #7c4dff;
 }
 
+.guest-card-status.status-EO {
+  background: rgba(255, 109, 0, 0.2);
+  color: #ff6d00;
+}
+
 .guest-card-status.status-D,
 .guest-card-status.status-CO {
   background: rgba(158, 158, 158, 0.2);
@@ -1376,6 +1386,16 @@ body {
 
 .guest-card.card-status-SI:hover {
   background: rgba(124, 77, 255, 0.18);
+}
+
+/* EO = 預計退房 (橘色調 - 即將退房) */
+.guest-card.card-status-EO {
+  background: rgba(255, 109, 0, 0.10);
+  border-left: 4px solid #ff6d00;
+}
+
+.guest-card.card-status-EO:hover {
+  background: rgba(255, 109, 0, 0.18);
 }
 
 /* D / CO = 已退房 (綠色調 - 完成) */

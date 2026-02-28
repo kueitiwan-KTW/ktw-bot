@@ -153,6 +153,7 @@
     "status_confirmed": "已確認",
     "status_checked_in": "已入住",
     "status_staying": "續住中",
+    "status_expected_checkout": "預計退房",
     "status_cancelled": "已取消",
     "status_checked_out": "已退房",
     "status_no_show": "No Show",

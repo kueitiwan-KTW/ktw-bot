@@ -10,6 +10,7 @@ const STATUS_MAP = {
     'O': '已確認',
     'I': '已入住',
     'SI': '續住中',
+    'EO': '預計退房',
     'N': '新訂單',
     'R': '預約中',
     'D': '已取消',
@@ -308,11 +309,18 @@ async function getCheckinBookings(connection, dateOffset, statusFilter) {
         // 使用統一的狀態判斷函數 (DRY)
         let { statusCode, statusName } = await getEffectiveStatus(connection, bookingId, row[9]);
 
-        // 續住判斷：入住日期早於查看日期且仍在住 → 標記為「續住中」
-        const checkInDate = row[6];  // 'YYYY-MM-DD' 格式
+        // 續住判斷：入住日期早於查看日期且仍在住
+        const checkInDate = row[6];   // CI_DAT 'YYYY-MM-DD'
+        const checkOutDate = row[7];  // CO_DAT 'YYYY-MM-DD'
         if (statusCode === 'I' && checkInDate < viewedDateStr) {
-            statusCode = 'SI';
-            statusName = getStatusName('SI');
+            if (checkOutDate === viewedDateStr) {
+                // 退房當天 → 預計退房
+                statusCode = 'EO';
+            } else {
+                // 非退房當天 → 續住中
+                statusCode = 'SI';
+            }
+            statusName = getStatusName(statusCode);
         }
 
         return {

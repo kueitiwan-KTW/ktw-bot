@@ -153,6 +153,7 @@
     "status_confirmed": "Dikonfirmasi",
     "status_checked_in": "Sudah Check-in",
     "status_staying": "Masih Menginap",
+    "status_expected_checkout": "Check-out Hari Ini",
     "status_cancelled": "Dibatalkan",
     "status_checked_out": "Sudah Check-out",
     "status_no_show": "No Show",
