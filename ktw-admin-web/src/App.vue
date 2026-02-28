@@ -171,7 +171,9 @@ function sortGuestsByStatus(guests) {
 function getTabRoomCount(offset) {
   const tab = guestTabs[offset.toString()];
   if (!tab || !tab.data) return 0;
-  return tab.data.reduce((sum, group) => {
+  // 排除續住客 (SI) 和預計退房 (EO)，只計算當日入住的房間數
+  const filtered = tab.data.filter(g => g.status_code !== 'SI' && g.status_code !== 'EO');
+  return filtered.reduce((sum, group) => {
     // 優先用 items 陣列計算
     if (group.items && group.items.length > 0) {
       return sum + group.items.reduce((s, item) => s + (item.room_count || 1), 0);
