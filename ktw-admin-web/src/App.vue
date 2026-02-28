@@ -192,9 +192,10 @@ function getTabRoomCount(offset) {
   let stayRooms = 0;
   tab.data.forEach(g => {
     const rooms = countRooms(g);
-    if (g.status_code === 'SI' || g.status_code === 'EO') {
+    if (g.status_code === 'SI') {
       stayRooms += rooms;
-    } else {
+    } else if (g.status_code !== 'EO') {
+      // EO（預計退房）不計入任何計數
       newRooms += rooms;
     }
   });
