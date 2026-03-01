@@ -433,7 +433,7 @@ class HotelBot:
             self.logger.log(user_id, "User", "[傳送了一張圖片]")
             self.logger.log(user_id, "Bot (Vision)", text)
             
-            # If we found a number, we can suggest the user to check it
+            # 只提取訂單編號，不回傳其他圖片分析內容
             match = re.search(r'(\d{5,})', text)
             if match:
                 found_id = match.group(1)
@@ -441,7 +441,8 @@ class HotelBot:
                 self.user_context[user_id] = {"pending_order_id": found_id}
                 return f"我從圖片中看到了訂單編號 {found_id}。請問您是要查詢這筆訂單嗎？"
             else:
-                return text
+                # 找不到訂單編號 → 不分析圖片內容，引導客人用文字溝通
+                return "感謝您傳送圖片！如果您想查詢訂單，請提供訂單編號或傳送含有訂單編號的截圖。若有其他需求，歡迎直接用文字告訴我 😊"
 
         except ValueError as ve:
             # Gemini API returned finish_reason != STOP (usually due to token limit or safety filter)
