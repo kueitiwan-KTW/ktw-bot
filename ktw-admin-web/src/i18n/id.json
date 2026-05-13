@@ -91,6 +91,7 @@
     "sending": "Mengirim...",
     "send_record": "📨 Kirim dan Catat",
     "send_success": "✅ Terkirim dan dicatat, AI dapat melihatnya nanti",
+    "line_send_fail": "⚠️ Dicatat, tapi gagal mengirim via LINE (kuota bulanan habis). Kirim manual via LINE OA Manager",
     "send_fail": "❌ Gagal mengirim",
     "history_title": "📋 Balasan yang Dicatat",
     "history_empty": "Belum ada catatan balasan manual",

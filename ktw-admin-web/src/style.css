@@ -2508,6 +2508,17 @@ body {
   font-weight: 500;
 }
 
+.sync-warning {
+  font-size: 0.82rem;
+  color: #f59e0b;
+  font-weight: 500;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  line-height: 1.4;
+}
+
 .sync-reply-hint {
   flex: 1;
   display: flex;

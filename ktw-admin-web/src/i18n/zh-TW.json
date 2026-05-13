@@ -91,6 +91,7 @@
     "sending": "發送中...",
     "send_record": "📨 發送並記錄",
     "send_success": "✅ 已發送給客人並記錄，AI 下次對話能看到",
+    "line_send_fail": "⚠️ 已記錄回覆，但 LINE 發送失敗（可能月額度已用完），請至 LINE OA Manager 手動發送",
     "send_fail": "❌ 發送失敗",
     "history_title": "📋 已記錄的回覆",
     "history_empty": "尚無手動回覆紀錄",

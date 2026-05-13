@@ -271,7 +271,7 @@ const todayCheckinUsers = ref([]);
 const todayCheckinLoading = ref(false);
 const selectedUserId = ref(null);
 const syncReplyMessage = ref('');
-const syncReplyStatus = ref(null); // null | 'sending' | 'success' | 'error'
+const syncReplyStatus = ref(null); // null | 'sending' | 'success' | 'line_fail' | 'error'
 
 // 取得當日入住客人的 LINE 資訊
 async function fetchTodayCheckinUsers() {
@@ -331,12 +331,18 @@ async function syncReply() {
     if (res.ok) {
       const result = await res.json();
       if (result.success) {
-        syncReplyStatus.value = 'success';
+        // 區分：LINE 發送成功 vs 僅記錄（LINE 發送失敗）
+        if (result.line_sent === false) {
+          syncReplyStatus.value = 'line_fail';
+        } else {
+          syncReplyStatus.value = 'success';
+        }
         syncReplyMessage.value = '';
         // 重新載入歷史紀錄
         fetchSyncHistory(selectedUserId.value);
-        // 3 秒後清除成功狀態
-        setTimeout(() => { syncReplyStatus.value = null; }, 3000);
+        // line_fail 顯示較長時間（6秒），success 顯示 3 秒
+        const clearDelay = syncReplyStatus.value === 'line_fail' ? 6000 : 3000;
+        setTimeout(() => { syncReplyStatus.value = null; }, clearDelay);
       } else {
         syncReplyStatus.value = 'error';
       }
@@ -1827,6 +1833,7 @@ const statusIcons = {
                   {{ syncReplyStatus === 'sending' ? $t('sync.sending') : $t('sync.send_record') }}
                 </button>
                 <span v-if="syncReplyStatus === 'success'" class="sync-success">{{ $t('sync.send_success') }}</span>
+                <span v-if="syncReplyStatus === 'line_fail'" class="sync-warning">{{ $t('sync.line_send_fail') }}</span>
                 <span v-if="syncReplyStatus === 'error'" class="sync-error">{{ $t('sync.send_fail') }}</span>
               </div>
               <!-- 歷史紀錄 -->
